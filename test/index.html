@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+  <link    href="/src/style.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vite App</title>
+</head>
+
+<body>
+  <div id="app"> 
+    <video width="1024" height="800" controls id="video" >
+        您的浏览器不支持 Video 标签。
+    </video>
+  <script type="module">
+    import {VideoDash} from "/dist/atc-videoplayer.js"
+    var videoElement = document.querySelector('#video')  ;
+    const vd = new VideoDash(videoElement)
+    console.log(vd);
+    vd.loader("example.mpd");
+  </script></div>
+
+</body>
+
+</html>
