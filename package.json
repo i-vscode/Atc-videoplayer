@@ -1,7 +1,7 @@
 {
   "name": "atc-videoplayer",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.0.2",
   "type": "module",
   "description": "atc播放器",
   "keywords": ["atc","播放器","dash"],

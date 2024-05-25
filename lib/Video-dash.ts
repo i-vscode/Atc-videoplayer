@@ -41,15 +41,19 @@ class VideoDashPrivate implements VideoDash {
             let lastTime = new Date().getTime()
             return (isseek: boolean = false) => {
                 let now = new Date().getTime()
-                if (now - lastTime > duration) {
+                if (now - lastTime > duration || isseek) {
                     if (mse.mediaSource.readyState === "open" || isseek) {
                         if (isseek) {
-                            //  this.#RepresentationVideo?.currentfetchabort?.()
-                            //  this.#RepresentationAudio?.currentfetchabort?.()
+                            this.#RepresentationVideo?.currentfetchabort?.()
+                            this.#RepresentationAudio?.currentfetchabort?.()
                         }
                         console.log("trigger_BUFFER_PUSH_MEDIASTREAM....", this.el.currentTime, isseek);
-                        this.#eventbus.trigger(eventType.BUFFER_PUSH_MEDIASTREAM, this.#RepresentationVideo)
-                        this.#eventbus.trigger(eventType.BUFFER_PUSH_MEDIASTREAM, this.#RepresentationAudio)
+
+                        if (this.#RepresentationVideo)
+                            this.#eventbus.trigger(eventType.BUFFER_PUSH_MEDIASTREAM, this.#RepresentationVideo)
+
+                        if (this.#RepresentationAudio)
+                            this.#eventbus.trigger(eventType.BUFFER_PUSH_MEDIASTREAM, this.#RepresentationAudio)
                         lastTime = now;
                     }
 
@@ -60,8 +64,7 @@ class VideoDashPrivate implements VideoDash {
             trigger_BUFFER_PUSH_MEDIASTREAM()
         });
         this.#el.addEventListener("seeking", () => {
-            console.log("跳转中.....");
-            
+            console.log("跳转中.....", this.#el.currentTime);
             trigger_BUFFER_PUSH_MEDIASTREAM(true)
         });
         /** 下载 */
@@ -90,8 +93,8 @@ class VideoDashPrivate implements VideoDash {
                     mse.mediaSource.endOfStream()
                 }
             }
-        } 
-        mse.mediaSource.addEventListener("sourceopen", () => { 
+        }
+        mse.mediaSource.addEventListener("sourceopen", () => {
             mse.duration = this.#MPD!.mediaPresentationDuration
             this.#Period = this.#MPD?.next()
             if ((this.#Period?.AdaptationSetVideo?.Representation.length ?? 0) > 0) {
@@ -117,11 +120,7 @@ class VideoDashPrivate implements VideoDash {
             if (mse.mediaSource.readyState === "open") { mse.mediaSource.endOfStream() }
             this.#el.src = mse.createObjectURL()
         })
-        this.#eventbus.on(eventType.PERIOD_SWITCH_STARTED, () => {
-            this.SetQuality("video", 0);
-            this.SetQuality("audio", -1)
 
-        })
         const sourceTasksPushBuffer = (arrt: ArrayBuffer, mediatype: mediaType) => {
             switch (mediatype) {
                 case "video":
@@ -147,48 +146,59 @@ class VideoDashPrivate implements VideoDash {
                 }
             }
         })
+
+        this.#eventbus.on(eventType.PERIOD_SWITCH_STARTED, () => {
+            //this.#el.currentTime=3845
+            //this.#el.currentTime = 3901
+            this.SetQuality("video", 0);
+            this.SetQuality("audio", -1)
+
+        })
         /** 获取下次分布媒体文件的缓冲Url */
         const GetBufferMediaNumber = (representation: RepresentationRuntime) => {
             const buffered = representation.buffered
             /** 经过计算的持续时间 */
             const computedDuratio = representation?.computedDuratio ?? Infinity
-            const maxDurationTiem = this.#MPD?.mediaPresentationDuration ?? Infinity;
-            const maxDurationNumber = Math.ceil(maxDurationTiem / computedDuratio);
+            const maxDurationNumber = Math.ceil((this.#MPD?.mediaPresentationDuration ?? Infinity) / computedDuratio);
             const minBufferTime = this.#options.minBufferTime;
             const startNumber = representation?.SegmentTemplate?.startNumber ?? 1;
             const buffer = {
-                currentNumber: representation.currentfetchindex ?? 0,
                 currentTime: this.#el.currentTime,
                 StartTime: 0,
                 EndTime: 0,
                 /** 应该缓冲数量 */
                 bufferNumber: NaN
             }
-            /** 确定当前进度是否在已有缓冲时间内 */
-            for (let index = 0; index < (buffered?.length ?? 0); index++) {
-                buffer.EndTime = buffered?.end(index) ?? 0
-                buffer.StartTime = buffered?.start(index) ?? 0
-                if (buffer.EndTime >= buffer.currentTime) {
-                    if (buffer.currentTime >= buffer.StartTime) {
-                        buffer.bufferNumber = Math.ceil(
-                            (minBufferTime - (buffer.EndTime - buffer.currentTime)) / computedDuratio)
-                        buffer.currentTime = buffer.EndTime;
+
+            if(!isNaN(representation.currentfetchindex)) {
+                /** 确定当前进度是否在已有缓冲时间内 */
+                for (let index = 0; index < (buffered?.length ?? 0); index++) {
+                    buffer.EndTime = buffered?.end(index) ?? 0
+                    buffer.StartTime = buffered?.start(index) ?? 0
+                    if (buffer.EndTime >= buffer.currentTime) {
+                        if (buffer.currentTime >= buffer.StartTime) {
+                            buffer.bufferNumber = Math.ceil(
+                                (minBufferTime - (buffer.EndTime - buffer.currentTime)) / computedDuratio)
+                            if (representation.currentfetchindex + 1 < Math.min(
+                                (Math.trunc(buffer.EndTime / computedDuratio) + buffer.bufferNumber
+                                ), maxDurationNumber)) {
+                                representation.currentfetchindex++;
+                                console.log(`%c 缓冲内 %c ${representation.currentfetchindex}`, "color:red");
+
+                                return new URL(this.#options.parsemedia(representation, representation.currentfetchindex + startNumber), this.#url)
+                            }
+                        }
+                        break
                     }
-                    break
                 }
             }
-            /**  如果应缓冲数量小于 0 则不用缓冲 */
-            if (buffer.bufferNumber > 0) {
-                buffer.currentNumber++
-                if (buffer.currentNumber < maxDurationNumber) {
-                    representation.currentfetchindex = buffer.currentNumber
-                    return new URL(this.#options.parsemedia(representation, buffer.currentNumber + startNumber), this.#url)
+            if (isNaN(buffer.bufferNumber)) {
+                representation.currentfetchindex = Math.trunc(this.#el.currentTime / computedDuratio);
+                if (representation.currentfetchindex > 0 && buffer.StartTime >= buffer.currentTime && Math.trunc(buffer.StartTime / computedDuratio) === representation.currentfetchindex) {
+                    representation.currentfetchindex--
                 }
-            }
-            else if (isNaN(buffer.bufferNumber)) {
-                buffer.currentNumber = Math.floor(buffer.currentTime / computedDuratio);
-                representation.currentfetchindex = buffer.currentNumber
-                return new URL(this.#options.parsemedia(representation, buffer.currentNumber + startNumber), this.#url)
+                console.log(`%c 缓冲外 %c ${representation.currentfetchindex}`, "color:red");
+                return new URL(this.#options.parsemedia(representation, representation.currentfetchindex + startNumber), this.#url)
             }
         }
         this.#eventbus.on(eventType.BUFFER_PUSH_MEDIASTREAM, (representation: RepresentationRuntime) => {
@@ -196,8 +206,8 @@ class VideoDashPrivate implements VideoDash {
             const speedtime = download.start()
             const mediaUrlNumber = GetBufferMediaNumber(representation)
             if (mediaUrlNumber) {
-                representation?.currentfetchabort?.()
-                representation.currentfetchabort = () => { controller.abort() }
+                console.log(`%c mediaUrlNumber %c ${mediaUrlNumber}`, "color:blue");
+                representation.currentfetchabort = () => { controller.abort(); representation.currentfetchindex = NaN }
                 this.#eventbus.trigger(eventType.BUFFER_FETCH_STATE, representation, controller)
                 fetch(mediaUrlNumber, { signal: controller.signal })
                     .then(r => { if (r.status < 400) { return r.arrayBuffer() } throw r }).then(arr => {
@@ -207,11 +217,21 @@ class VideoDashPrivate implements VideoDash {
             }
         })
         const mediaNumber = /\$Number(.*)\$/
-        this.#eventbus.on(eventType.QUALITY_CHANGE_REQUESTED, (mediatype: mediaType, index: number, isRemovesourceBuffer: boolean = false) => {
+        this.#eventbus.on(eventType.QUALITY_CHANGE_REQUESTED, (mediatype: mediaType, id: number, isRemovesourceBuffer: boolean = false) => {
             switch (mediatype) {
                 case "video":
                     this.#RepresentationVideo?.currentfetchabort?.()
-                    this.#RepresentationVideo = this.#Period?.AdaptationSetVideo?.Representation.at(index) as RepresentationRuntime | undefined
+                    if(typeof id ==="string"){
+                        this.#Period?.AdaptationSetVideo?.Representation.forEach((r)=>{
+                            if(r.id===id){
+                                this.#RepresentationVideo =  r as RepresentationRuntime | undefined
+                            }
+                        })
+            
+                    }else if(typeof id ==="number"){
+                        this.#RepresentationVideo = this.#Period?.AdaptationSetVideo?.Representation.at(id) as RepresentationRuntime | undefined
+                    }
+                  
                     if (this.#RepresentationVideo) {
                         if (!Reflect.has(this.#RepresentationVideo, "SegmentTemplate")) {
                             Reflect.defineProperty(this.#RepresentationVideo, "SegmentTemplate", {
@@ -244,7 +264,17 @@ class VideoDashPrivate implements VideoDash {
                     break;
                 case "audio":
                     this.#RepresentationAudio?.currentfetchabort?.()
-                    this.#RepresentationAudio = (this.#Period?.AdaptationSetAudio?.Representation.at(-1) ?? {}) as RepresentationRuntime | undefined
+                    if(typeof id ==="string"){
+                        this.#Period?.AdaptationSetVideo?.Representation.forEach((r)=>{
+                            if(r.id===id){
+                                this.#RepresentationAudio =  r as RepresentationRuntime | undefined
+                            }
+                        })
+            
+                    }else if(typeof id ==="number"){
+                        this.#RepresentationAudio = (this.#Period?.AdaptationSetAudio?.Representation.at(id) ?? {}) as RepresentationRuntime | undefined
+                    }
+                   
                     if (this.#RepresentationAudio) {
                         if (!this.#RepresentationAudio?.SegmentTemplate) {
                             Reflect.defineProperty(this.#RepresentationAudio, "SegmentTemplate", {
@@ -283,8 +313,8 @@ class VideoDashPrivate implements VideoDash {
     on(eventname: eventType.SOURCEBUFFERUPDATEEND, fn: (representation: RepresentationRuntime) => void): void;
     on<T extends eventType>(eventname: T, fn: any) { this.#eventbus.on(eventname, fn) }
     /** 设定画质 */
-    SetQuality(mediatype: mediaType, index: number, isRemovesourceBuffer: boolean = false) {
-        this.#eventbus.trigger(eventType.QUALITY_CHANGE_REQUESTED, mediatype, index, isRemovesourceBuffer)
+    SetQuality(mediatype: mediaType, id: number | string, isRemovesourceBuffer: boolean = false) {
+            this.#eventbus.trigger(eventType.QUALITY_CHANGE_REQUESTED, mediatype, id, isRemovesourceBuffer)
     }
 
     GetQuality(mediatype: mediaType) {
@@ -311,10 +341,10 @@ class VideoDashPrivate implements VideoDash {
     /** 装载MPD文件 */
     loader(url: URL | string) {
         this.#url = url instanceof URL ? url : new URL(url, window.location.href);
-        fetch(url).then(c =>{
-             if(c.status<400) return c.text()
-             throw c
-            }).then(c => {
+        fetch(url).then(c => {
+            if (c.status < 400) return c.text()
+            throw c
+        }).then(c => {
             this.#MPD = new MPD3(c)
             this.#eventbus.trigger(eventType.MANIFEST_LOADING_FINISHED)
         })

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vite App</title>
+    <style>
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+        }
+
+        body {
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            flex-wrap: nowrap;
+            align-items: center;
+        }
+    </style>
+
+<body>
+    <script type="module" src="/src/main.ts"></script>
+    <div videoplayer>
+        <video width="800" height="600" id="video2"></video>
+        <div message_box>
+              <!-- <button message_box_played class="hide"></button>  -->
+            <svg message_box_loading xmlns="http://www.w3.org/2000/svg" version="1.1">
+                <defs>
+                    <g id="r1">
+                        <rect width="30" height="30" >
+                            <animateTransform attributeName="transform" attributeType="XML" type="rotate" from="0 15 15"
+                                to="360 15 15" dur="5s" repeatCount="indefinite" additive="sum" />
+
+                        </rect>
+                        <animateTransform attributeName="transform" attributeType="XML" type="scale" from="1" to="2"
+                            dur="5s" repeatCount="indefinite" additive="sum" />
+
+                    </g>
+                </defs>
+                <symbol id="mloading" viewBox="0 0 300 300">
+                    <use href="#r1" x="15" y="135" />
+                    <use href="#r1" x="135" y="135" />
+                    <use href="#r1" x="240" y="135" />
+                </symbol>
+                <use href="#mloading" />
+            </svg>
+
+        </div>
+        <div controllerbar>
+            <div class="timelines">
+                <svg timeline>
+                    <use href="#sym01" />
+                    <use href="#sym02" width="20%" />
+                    <use href="#sym02" width="20%" x="50%" />
+                </svg>
+                <svg progress>
+                    <use href="#sym03" x="23%" />
+                </svg>
+            </div>
+            <div class="buttons">
+                <button playSwitch>播放</button>
+                <span timescale_text class="info">0</span>
+                <span class="info"> / </span>
+                <span duration_text class="info">0</span>
+                <Placeholder Placeholder></Placeholder>
+                <button qualitylist>画质</button>
+                <input type="range" id="a" value="50" volume><button muted>静音</button>
+                <button fullscreenSwitch>全屏</button>
+            </div>
+        </div>
+</body>
+
+</html>

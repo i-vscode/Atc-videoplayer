@@ -28,7 +28,7 @@ export class Elextend {
 
 /** 播放器 UI */
 export class VideoControllerbar implements VCB {
-    [x: string]: CbBing;
+    [x: string]:CbBing;
     #SetProperty(el?: HTMLElement) {
         const elextend: Elextend = new Elextend(el);
         return <CbBing>((ext) => {

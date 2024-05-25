@@ -1,4 +1,4 @@
-import { VideoControllerbar, VideoDash,VideoDashEventType as evType } from '../lib/';
+import { VideoControllerbar, VideoDash, VideoDashEventType as evType } from '../lib/';
 
 /**
  * js事件节流
@@ -25,6 +25,7 @@ export const debounce = <Fn extends (...args: any) => void>(callback: Fn, delay:
     }
 }
 function getTime(time: number) {
+    time ??= 0
     // 转换为式分秒
     let h = (Array(2).join("0") + Math.floor(time / 60 / 60 % 24)).slice(-2)
     let m = (Array(2).join("0") + Math.floor(time / 60 % 60)).slice(-2)
@@ -35,10 +36,11 @@ function getTime(time: number) {
 
 export function videoui(param: string, videoDash: VideoDash) {
     const videoElement = videoDash.el;
-    const videoControllerbar = new VideoControllerbar(param, videoDash) 
+    const videoControllerbar = new VideoControllerbar(param, videoDash)
     /** 播放切换开关 */
     videoControllerbar.playSwitch({
         setup(el) {
+
             videoElement?.addEventListener("pause", () => this.setstatus(el))
             videoElement?.addEventListener("canplaythrough", () => this.setstatus(el))
             videoElement?.addEventListener("play", () => this.setstatus(el))
@@ -62,11 +64,12 @@ export function videoui(param: string, videoDash: VideoDash) {
     videoControllerbar.volume({
         setup(el) {
             videoElement.addEventListener("volumechange", () => this.cb(el))
-            el!.onchange = () => {
+            el?.addEventListener("change", () => {
                 if (videoElement.muted) { videoElement.muted = false }
                 videoElement.volume = Math.fround(Number.parseInt((el as HTMLInputElement)?.value) / 100)
                 if (videoElement.volume === 0) videoElement.muted = true
-            }
+            })
+            this.cb(el)
         },
         cb: (el) => {
             if (videoElement.muted) { (el as HTMLInputElement).value = "0"; }
@@ -82,6 +85,7 @@ export function videoui(param: string, videoDash: VideoDash) {
                 videoElement.muted = !videoElement.muted
             })
             videoElement.addEventListener("volumechange", () => this.cb(el))
+            this.cb(el)
         },
         cb(el) {
             const htmlel = el as HTMLElement
@@ -101,6 +105,20 @@ export function videoui(param: string, videoDash: VideoDash) {
     videoControllerbar.el({
         setup(el) {
             let isclick = true
+            window?.addEventListener("keydown", (e) => {
+                if (videoElement)
+                    switch (e.code) {
+                        case "ArrowRight":
+                            videoElement.currentTime += 5
+                            break;
+
+                        case "ArrowLeft":
+                            videoElement.currentTime -= 5
+                            break;
+                    }
+
+                //  if (e.code === "k") { (el as HTMLVideoElement).currentTime+=5}
+            })
             el?.addEventListener("dblclick", () => { videoControllerbar.fullscreenSwitch() })
             el?.addEventListener("touchstart", () => {
                 videoControllerbar.controllerbar?.((el_controllerbar) => {
@@ -114,6 +132,22 @@ export function videoui(param: string, videoDash: VideoDash) {
             el?.addEventListener("click", () => { if (isclick) videoControllerbar.playSwitch?.() })
         },
     })
+    videoControllerbar.qualitylist({
+        setup(el) {
+            
+           videoDash.on(evType.BUFFER_FETCH_END,(r,e)=>{
+
+            console.log("eeess",r,e);
+            
+           })
+            el?.addEventListener("click",()=>{
+                
+                videoDash.SetQuality("video",1)
+                const vq= videoDash.GetQuality("video")
+                console.log("fefefe",vq);
+            })
+        },
+    })
     /** 显示的时间刻度文字 */
     videoControllerbar.timescale_text({
         setup(el_timescale) {
@@ -122,18 +156,28 @@ export function videoui(param: string, videoDash: VideoDash) {
                     el_timescale.innerText = getTime(videoElement.currentTime)
                 }
             }, 1000))
+            videoElement.addEventListener("seeking", () => {
+
+                if (el_timescale)
+                    el_timescale.innerText = getTime(videoElement.currentTime)
+            })
             if (el_timescale)
                 el_timescale.innerText = getTime(videoElement.currentTime)
         }
     })
-    videoControllerbar.duration_text({
+    videoControllerbar.duration_text?.({
         setup(el_duration) {
             videoElement.addEventListener("canplay", () => {
-                if (el_duration) { el_duration.innerText = getTime(videoElement.duration) }
+
+                if (el_duration)
+                    el_duration.innerText = videoElement.duration ? getTime(videoElement.duration) : getTime(0)
+
             })
+            if (el_duration)
+                el_duration.innerText = (videoElement.duration) ? getTime(videoElement.duration) : getTime(0)
         },
     })
-    videoControllerbar.message_box_played({
+    videoControllerbar.message_box_played?.({
         setup(el) {
             el?.addEventListener("click", () => { videoControllerbar.playSwitch?.() })
         },
@@ -143,16 +187,42 @@ export function videoui(param: string, videoDash: VideoDash) {
         cb(el) {
             el?.classList.remove("hide")
             this.hide(el)
+            return this
+        }
+    })
+
+    videoControllerbar.message_box_loading?.({
+        setup(el) {
+            videoElement.addEventListener("canplay", () => {this.show(el,false)})
+            videoElement.addEventListener("loadstart", () => { this.show(el)})            
+            videoElement.addEventListener("waiting", () => { this.show(el) })
+            videoElement.addEventListener("seeking", () => { this.show(el) })
+
+        },
+        show(el?: HTMLElement,isshow=true){
+            if(isshow){
+                el?.classList.add("show") 
+                videoControllerbar.message_box_played?.((box_played)=>{
+                    box_played?.classList.add("hide")
+                } )
+            }else{
+                el?.classList.remove("show") 
+                videoControllerbar.message_box_played?.(  )
+            }
+            
+          
         }
     })
     videoControllerbar.videoDiv({
         setup(el) {
+
             /** 控制栏自动隐藏 */
             videoControllerbar.controllerbar?.({
                 setup(controllerbar) {
                     el?.addEventListener("mouseleave", () => { this.hide(controllerbar) })
                     el?.addEventListener("mousemove", () => { this.cb(controllerbar) })
                     el?.addEventListener("click", () => { this.cb(controllerbar) })
+
 
                 },
                 hide: debounce((el?: HTMLElement) => {
@@ -167,7 +237,7 @@ export function videoui(param: string, videoDash: VideoDash) {
                     el?.classList.remove("hide")
                     el?.classList.remove("hide2")
                     this.hide(el)
-                    videoControllerbar.message_box_played()
+                  //  videoControllerbar.message_box_played()
                 }
             })
 
@@ -182,11 +252,16 @@ export function videoui(param: string, videoDash: VideoDash) {
                 },
                 cb(el_fullscreenSwitch) {
                     if (document.fullscreenElement === el) {
-                        document?.exitFullscreen().then(() => { this.setstatus(el_fullscreenSwitch) })
+                        document?.exitFullscreen().then(() => {
+                            this.setstatus(el_fullscreenSwitch);
+                            screen.orientation!.unlock();
+                        })
                     } else {
                         el?.requestFullscreen().then(() => {
                             this.setstatus(el_fullscreenSwitch);
-                            // screen.orientation?.lock("landscape");
+
+                            /**自动横屏 */
+                            //screen.orientation?.lock("landscape");
                         })
                     }
                 }
@@ -198,9 +273,7 @@ export function videoui(param: string, videoDash: VideoDash) {
             el?.addEventListener("click", (e) => {
                 console.log("tt_timeline", e, el);
                 const ex = videoElement.duration * (e.offsetX / el.clientWidth)
-                console.log(ex);
-
-                videoElement.currentTime = ex
+                videoElement.currentTime = isNaN(ex) ? 0 : ex
             })
         },
     })
@@ -234,6 +307,7 @@ export function videoui(param: string, videoDash: VideoDash) {
             }
             videoElement.addEventListener("canplay", () => { eltimescale() })
             videoElement.addEventListener("timeupdate", throttle(() => { eltimescale() }, 1000))
+            videoElement.addEventListener("seeking", () => { eltimescale() })
         }
     })
 
