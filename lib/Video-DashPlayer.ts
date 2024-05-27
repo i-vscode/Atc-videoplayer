@@ -20,7 +20,7 @@ const fetchMpd = async (url: URL, options: VideoDashOptions) => {
     )
 }
 const debounce = <Fn extends (...args: any) => void>(callback: Fn, delay: number = 200) => {
-    let t: number;
+    let t: number | any
     return (...e: Parameters<Fn>) => {
         clearTimeout(t)
         t = setTimeout(() => { callback(e) }, delay);
@@ -108,12 +108,9 @@ class SourceBufferTask {
     constructor(mse: MediaSource, mpd: MPD, url: URL,) {
         this.#SourceBuffer = mse.addSourceBuffer(`video/mp4; codecs="avc1.64001f"`)
         this.#Url = url;
-        this.#MPD = mpd;
-        console.log("SourceBufferTask", this.#MPD);
+        this.#MPD = mpd; 
         //媒体源 关闭事件
-        mse.addEventListener("sourceclose", () => {
-            this.#tasks.list.length = 0;
-        })
+        mse.addEventListener("sourceclose", () => { this.#tasks.list.length = 0;})
         // 源缓存对象 更新结束事件
         this.#SourceBuffer.addEventListener("updateend", () => {
             const arrayBuffer = this.#arrayBuffers.shift()
@@ -154,8 +151,7 @@ export class VideoDash {
             width: number,
             /** 视频媒体高度 */
             height: number,
-            /** 切换使用此rep源 
-             * @param timeupdate 要播放的开始时间，不能大于总时间，否则为 0
+            /** 切换使用此rep源  
              * @param Ignorebuffered 默认false 是否忽略已经缓存的数据（软切换），直接使用新数据（强制切换）
             */
             switch(Ignorebuffered?: boolean): void
@@ -168,8 +164,7 @@ export class VideoDash {
         /** 媒体类型 */
         mimeType: string,
         /***/
-        /** 切换使用此rep源 
-         * @param timeupdate 要播放的开始时间，不能大于总时间，否则为 0
+        /** 切换使用此rep源  
          * @param Ignorebuffered 默认false 是否忽略已经缓存的数据（软切换），直接使用新数据（强制切换）
          */
         switch(Ignorebuffered?: boolean): void

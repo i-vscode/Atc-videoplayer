@@ -1,20 +1,19 @@
 import './style.css'
-import { VideoDash } from '../lib/Video-DashPlayer';
+import { VideoDash ,VideoController} from '../lib';
 const url = "/dash3/output.mpd";
+
+const vc = new VideoController("videoplayer");
+console.log(vc);
+
 const dp = new VideoDash("video2")
-const videoElement = dp.el
+//const videoElement = dp.el
 dp.loaderAsync(url).then(b => {
-    dp.videoSet?.at(-1)?.switch()
-    dp.audioSet?.at(-1)?.switch()
-    dp.videoBitrate/ dp.audioBitrate
-})
-setTimeout(() => {
-    // console.log("切换mpd");
-    // dp.loaderAsync("/dash3/output.mpd").then(b=>{        
-    // dp.videoSet?.at(-1)?.switch(true)
-    // dp.audioSet?.at(-1)?.switch(true)  
-    // }//)
-}, 15000);
+    if(b){
+        dp.videoSet?.at(-1)?.switch()
+        dp.audioSet?.at(-1)?.switch()
+        dp.videoBitrate/ dp.audioBitrate
+    }
+}) 
 // videoElement.addEventListener("abort", () => { console.log("abort 当音频/视频的加载已放弃时触发。") })
 // videoElement.addEventListener("canplay", () => { console.log("canplay	当浏览器可以开始播放音频/视频时触发。") })
 // videoElement.addEventListener("canplaythrough", () => { console.log("canplaythrough  当浏览器可在不因缓冲而停顿的情况下进行播放时触发。") })

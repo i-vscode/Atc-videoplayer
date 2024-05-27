@@ -1,7 +1,7 @@
 /** 清晰度列表类型
- * 
+ *
  */
-export enum QualityType {
+export declare enum QualityType {
     "original" = "original",
     "2160k60" = "2160k60",
     "2160k" = "2160k",
@@ -13,5 +13,5 @@ export enum QualityType {
     "480P" = "480P",
     "360P" = "360P",
     "240P" = "240P",
-    "144P" = "144P",
+    "144P" = "144P"
 }

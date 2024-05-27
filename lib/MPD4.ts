@@ -231,6 +231,8 @@ export type Segment = {
 }
 export type RepType = {
     video: {
+        /** id */
+        id: string,
         /** 初始分段文件 */
         initialization?: string,
         /** 编码器 */
@@ -249,6 +251,8 @@ export type RepType = {
         startNumber: number
     } & Segment,
     audio: {
+        /** id */
+        id: string,
         /** 初始分段文件 */
         initialization?: string,
         /** 编码器 */
@@ -326,6 +330,7 @@ class Period {
             v.representation.forEach(r => {
                 this.#videoSet.push({
                     ...videoNext(r),
+                    id:r.id,
                     initialization: r.initialization,
                     codecs: r.codecs,
                     mimeType: r.mimeType,
@@ -333,7 +338,7 @@ class Period {
                     width: r.width,
                     height: r.height,
                     frameRate: isNaN(r.frameRate) ? v.frameRate : r.frameRate,
-                    startNumber:r.startNumber
+                    startNumber: r.startNumber
                 })
             })
         }),
@@ -341,11 +346,12 @@ class Period {
                 a.representation.forEach(r => {
                     this.#audioSet.push({
                         ...audioNext(r),
+                        id:r.id, 
                         initialization: r.initialization,
                         codecs: r.codecs,
                         mimeType: r.mimeType,
                         bandwidth: r.bandwidth,
-                        startNumber:r.startNumber
+                        startNumber: r.startNumber
                     })
                 })
             })
@@ -372,7 +378,7 @@ export class MPD {
     /** 最小缓存时间 */
     get minBufferTime() { return this.#minBufferTime }
     set minBufferTime(val) {
-        if(isFinite(val)) this.#minBufferTime = PTdurationToSeconds(val) ; 
+        if (isFinite(val)) this.#minBufferTime = PTdurationToSeconds(val);
     }
     #minBufferTime = NaN
 
@@ -383,10 +389,12 @@ export class MPD {
     constructor(mpdstring: string) {
         const mpd = new DOMParser().parseFromString(mpdstring, "text/xml").documentElement;
         for (const attr of mpd.attributes) {
-            if (attr.localName === "mediaPresentationDuration") { 
-                this.#mediaPresentationDuration = PTdurationToSeconds(attr.value); continue; }
-            if (attr.localName === "minBufferTime") { 
-                this.#minBufferTime = PTdurationToSeconds(attr.value); continue; }
+            if (attr.localName === "mediaPresentationDuration") {
+                this.#mediaPresentationDuration = PTdurationToSeconds(attr.value); continue;
+            }
+            if (attr.localName === "minBufferTime") {
+                this.#minBufferTime = PTdurationToSeconds(attr.value); continue;
+            }
             Reflect.set(this, attr.localName, attr.value)
         }
         for (const children of mpd.children) {

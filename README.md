@@ -43,6 +43,10 @@ dp.loaderAsync();
 
 ## [更新](/CHANGELOG.md)
 
+### 0.1.1
+
+修复细节，移除无关代码
+
 ### 0.1.0-alpha.1
 
  **重写VideoDash类**

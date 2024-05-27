@@ -1,7 +1,8 @@
+const mediaReg = /\$Number%(\d+)d\$/;
 const reptms = /^PT(?:(\d+\.*\d*)H)?(?:(\d+\.*\d*)M)?(?:(\d+\.*\d*)S)?$/;
-function PTdurationToSeconds(PT) {
+const PTdurationToSeconds = (PT) => {
   let hours = 0, minutes = 0, seconds = 0;
-  if (PT) {
+  if (typeof PT === "string") {
     if (reptms.test(PT)) {
       var matches = reptms.exec(PT);
       if (matches?.[1])
@@ -14,610 +15,601 @@ function PTdurationToSeconds(PT) {
     }
   }
   return NaN;
-}
-const defineProperty = (target, attr) => {
-  let value = attr.value;
-  switch (attr.localName) {
-    case "minBufferTime":
-    case "mediaPresentationDuration":
-    case "start":
-      value = PTdurationToSeconds(value);
-      break;
-    case "duration":
-    case "startNumber":
-    case "timescale":
-    case "width":
-    case "height":
-    case "maxHeight":
-    case "bandwidth":
-      value = Number.parseInt(value);
-      break;
-    case "value":
-      if (attr.ownerElement?.localName === "AudioChannelConfiguration")
-        value = Number.parseInt(value);
-      break;
-    case "segmentAlignment":
-    case "bitstreamSwitching":
-      value = !!value.break;
-  }
-  Reflect.defineProperty(target, attr.localName, { value, writable: false, enumerable: true, configurable: false });
 };
-const attributes = (target, source) => {
-  for (const attr of source.attributes) {
-    defineProperty(target, attr);
+class SegmentTemplate {
+  /** 持续时间  (持续时间 / 刻度 = 分段时长) */
+  get duration() {
+    return this.#duration;
   }
-};
-const defineChildren = (target, el, elname) => {
-  elname ??= el.localName;
-  if (el.childElementCount === 0 && el.attributes.length === 0 && el.firstChild?.nodeType === 3 && el.lastChild?.nodeType === 3) {
-    Reflect.defineProperty(target, elname, { value: el.textContent, writable: false, enumerable: true, configurable: false });
-  } else {
-    const ch = {};
-    attributes(ch, el);
-    childrens(ch, el);
-    switch (elname) {
-      case "Representation":
-        Reflect.defineProperty(ch, "mediaType", { value: target.contentType, writable: false, enumerable: true, configurable: false });
-        break;
+  #duration = NaN;
+  /** 分段时长 (持续时间 / 刻度 = 分段时长)  */
+  segmentduration = NaN;
+  /** 初始化安装文件 */
+  get initialization() {
+    return this.#initialization;
+  }
+  #initialization = "";
+  /** 媒体文件模板 */
+  #getMedia(i) {
+    const mediaRegExecArray = mediaReg.exec(this.#mediaTemplate);
+    if (mediaRegExecArray) {
+      const d = parseInt(mediaRegExecArray[1]);
+      return this.#mediaTemplate.replace(mediaRegExecArray[0], (Array(d).join("0") + i).slice(0 - d));
     }
-    if (target?.[el.localName] instanceof Array) {
-      Reflect.get(target, elname)?.push(ch);
-    } else {
-      Reflect.defineProperty(target, elname, { value: ch, writable: false, enumerable: true, configurable: false });
+    return void 0;
+  }
+  #mediaTemplate = "";
+  /** 开始数 */
+  get startNumber() {
+    return this.#startNumber;
+  }
+  #startNumber = NaN;
+  /** 跳转 计数*/
+  skipCount(i) {
+    if (i > 0 && this.#S && i <= this.#S.length) {
+      return {
+        duration: this.#S[i - 1],
+        count: i,
+        media: this.#getMedia(i)
+      };
+    } else if (i > 0 && !this.#S) {
+      return {
+        duration: this.#duration,
+        count: i,
+        media: this.#getMedia(i)
+      };
     }
+    return { duration: NaN, count: NaN, media: void 0 };
   }
-};
-const adaptationSetChildren = (target, el) => {
-  const contentType = el.attributes.getNamedItem("contentType")?.value;
-  switch (contentType) {
-    case "video":
-      defineChildren(target, el, "AdaptationSetVideo");
-      break;
-    case "audio":
-      defineChildren(target, el, "AdaptationSetAudio");
-      break;
-    case "image":
-      defineChildren(target, el, "AdaptationSetImage");
-      break;
-  }
-};
-const childrens = (target, source) => {
-  for (const iterator of source.children) {
-    switch (iterator.localName) {
-      case "Period":
-      case "Representation":
-        if (!(Reflect.get(target, iterator.localName) instanceof Array)) {
-          Reflect.defineProperty(target, iterator.localName, {
-            value: [],
-            writable: false,
-            enumerable: true,
-            configurable: false
-          });
+  /** 时间线数组 SegmentTimeline/S */
+  #S = void 0;
+  constructor(el, representationID) {
+    let timescale = 0, duration = 0;
+    for (const attr of el.attributes) {
+      switch (attr.localName) {
+        case "initialization":
+          this.#initialization = attr.value.replace("$RepresentationID$", representationID);
+          break;
+        case "media":
+          this.#mediaTemplate = attr.value.replace("$RepresentationID$", representationID);
+          break;
+        case "startNumber":
+          this.#startNumber = parseInt(attr.value);
+          break;
+        case "timescale":
+          timescale = parseInt(attr.value);
+          break;
+        case "duration":
+          duration = parseInt(attr.value);
+          break;
+        default:
+          Reflect.set(this, attr.localName, attr.value);
+          break;
+      }
+    }
+    for (const children of el.children) {
+      if (children.localName === "SegmentTimeline") {
+        this.#S = [];
+        for (const Schildren of children.children) {
+          if (Schildren.localName === "S") {
+            for (const arrt of Schildren?.attributes) {
+              if (arrt.localName === "d") {
+                this.#S.push(
+                  Math.floor(parseInt(arrt.value) / timescale * 100) / 100
+                );
+                break;
+              }
+            }
+            continue;
+          }
         }
         break;
-      case "AdaptationSet":
-        adaptationSetChildren(target, iterator);
-        continue;
+      }
     }
-    defineChildren(target, iterator);
+    if (this.#S && this.#S.length > 0) {
+      this.#duration = Math.floor(this.#S.reduce((previous, current) => current += previous) / this.#S.length * 100) / 100;
+    } else {
+      this.#duration = Math.floor(duration / timescale * 100) / 100;
+    }
   }
-};
-class MPD3 {
+}
+class Representation {
+  /** id */
+  get id() {
+    return this.#id;
+  }
+  #id = "";
+  /** 媒体类型 */
+  mimeType = "";
+  /**编码器 */
+  codecs = "";
+  /**字节带宽 */
+  get bandwidth() {
+    return this.#bandwidth;
+  }
+  set bandwidth(val) {
+    this.#bandwidth = Number.parseInt(val);
+  }
+  #bandwidth = 0;
+  /** 帧率 */
+  get frameRate() {
+    return this.#frameRate;
+  }
+  #frameRate = NaN;
+  /** 媒体比例 */
+  sar = "";
+  /** 媒体宽度 */
+  get width() {
+    return this.#width;
+  }
+  #width = NaN;
+  /**初始化文件 */
+  get initialization() {
+    return this.#segment?.initialization;
+  }
+  /** 媒体高度 */
+  get height() {
+    return this.#height;
+  }
+  #height = NaN;
+  #segment = void 0;
+  /** 持续时间  (持续时间 / 刻度 = 分段时长) */
+  get duration() {
+    return this.#segment?.duration ?? NaN;
+  }
+  /** 开始数 */
+  get startNumber() {
+    return this.#segment?.startNumber ?? NaN;
+  }
+  /** 跳转 计数 */
+  skipCount(i) {
+    return this.#segment?.skipCount(i) ?? { duration: NaN, count: NaN, media: void 0 };
+  }
+  constructor(representation) {
+    for (const attr of representation.attributes) {
+      if (attr.localName === "id") {
+        this.#id = attr.value;
+        continue;
+      }
+      if (attr.localName === "frameRate") {
+        const parts = attr.value.split("/");
+        this.#frameRate = parseInt(parts[0]) / parseInt(parts[1]);
+        continue;
+      }
+      if (attr.localName === "width") {
+        this.#width = Number.parseInt(attr.value);
+        continue;
+      }
+      if (attr.localName === "height") {
+        this.#height = Number.parseInt(attr.value);
+        continue;
+      }
+      Reflect.set(this, attr.localName, attr.value);
+    }
+    for (const children of representation.children) {
+      if (children.localName === "SegmentTemplate") {
+        this.#segment = new SegmentTemplate(children, this.id);
+        break;
+      }
+    }
+  }
+}
+class AdaptationSet {
+  get contentType() {
+    return this.#contentType;
+  }
+  #contentType = "";
+  get representation() {
+    return this.#representation;
+  }
+  #representation = [];
+  /** 帧率 */
+  get frameRate() {
+    return this.#frameRate;
+  }
+  #frameRate = NaN;
+  constructor(adaptationSet) {
+    for (const attr of adaptationSet.attributes) {
+      if (attr.localName === "contentType") {
+        this.#contentType = attr.value;
+        continue;
+      }
+      if (attr.localName === "frameRate") {
+        const parts = attr.value.split("/");
+        this.#frameRate = parseInt(parts[0]) / parseInt(parts[1]);
+        continue;
+      }
+      Reflect.set(this, attr.localName, attr.value);
+    }
+    for (const children of adaptationSet.children) {
+      if (children.localName === "Representation") {
+        this.#representation.push(new Representation(children));
+      }
+    }
+  }
+}
+class Period {
+  #adaptationSetVideo = [];
+  #adaptationSetAudio = [];
+  get start() {
+    return this.#start;
+  }
+  set start(val) {
+    this.#start = PTdurationToSeconds(val);
+  }
+  #start = NaN;
+  /** 视频适配集 */
+  get videoSet() {
+    return this.#videoSet;
+  }
+  #videoSet = [];
+  /** 音频适配集 */
+  get audioSet() {
+    return this.#audioSet;
+  }
+  #audioSet = [];
+  constructor(period) {
+    for (const attr of period.attributes) {
+      Reflect.set(this, attr.localName, attr.value);
+    }
+    for (const children of period.children) {
+      if (children.localName === "AdaptationSet") {
+        const _adaptationSet = new AdaptationSet(children);
+        if (_adaptationSet.contentType.startsWith("video")) {
+          this.#adaptationSetVideo.push(_adaptationSet);
+        } else if (_adaptationSet.contentType.startsWith("audio")) {
+          this.#adaptationSetAudio.push(_adaptationSet);
+        }
+      }
+    }
+    const videoNext = (rep) => {
+      let i = rep.startNumber;
+      const segment = {
+        ...rep.skipCount(i),
+        skip(duration) {
+          i = Math.floor(duration / rep.duration);
+          if (i < rep.startNumber)
+            i = rep.startNumber;
+          return { ...rep.skipCount(i), skip: segment.skip, next: segment.next, previous: segment.previous };
+        },
+        next() {
+          return { ...rep.skipCount(++i), skip: segment.skip, next: segment.next, previous: segment.previous };
+        },
+        previous() {
+          return { ...rep.skipCount(--i), skip: segment.skip, next: segment.next, previous: segment.previous };
+        }
+      };
+      return segment;
+    };
+    const audioNext = (rep) => {
+      let i = rep.startNumber;
+      const segment = {
+        ...rep.skipCount(i),
+        skip(duration) {
+          i = Math.floor(duration / rep.duration);
+          if (i < rep.startNumber)
+            i = rep.startNumber;
+          return { ...rep.skipCount(i), skip: segment.skip, next: segment.next, previous: segment.previous };
+        },
+        next() {
+          return { ...rep.skipCount(++i), skip: segment.skip, next: segment.next, previous: segment.previous };
+        },
+        previous() {
+          return { ...rep.skipCount(--i), skip: segment.skip, next: segment.next, previous: segment.previous };
+        }
+      };
+      return segment;
+    };
+    this.#adaptationSetVideo.forEach((v) => {
+      v.representation.forEach((r) => {
+        this.#videoSet.push({
+          ...videoNext(r),
+          initialization: r.initialization,
+          codecs: r.codecs,
+          mimeType: r.mimeType,
+          bandwidth: r.bandwidth,
+          width: r.width,
+          height: r.height,
+          frameRate: isNaN(r.frameRate) ? v.frameRate : r.frameRate,
+          startNumber: r.startNumber
+        });
+      });
+    }), this.#adaptationSetAudio.forEach((a) => {
+      a.representation.forEach((r) => {
+        this.#audioSet.push({
+          ...audioNext(r),
+          initialization: r.initialization,
+          codecs: r.codecs,
+          mimeType: r.mimeType,
+          bandwidth: r.bandwidth,
+          startNumber: r.startNumber
+        });
+      });
+    });
+  }
+}
+class MPD {
+  /** 总的时长 持续时间 */
+  get mediaPresentationDuration() {
+    return this.#mediaPresentationDuration;
+  }
+  //set mediaPresentationDuration(val) { this.#mediaPresentationDuration = PTdurationToSeconds(val) }
+  #mediaPresentationDuration = NaN;
+  /** 最大分段场持续时间  指的是加载的 每个m4s段的最大时间  */
+  get maxSegmentDuration() {
+    return this.#maxSegmentDuration;
+  }
+  set maxSegmentDuration(val) {
+    this.#maxSegmentDuration = PTdurationToSeconds(val);
+  }
+  #maxSegmentDuration = NaN;
+  /** 最小缓存时间 */
+  get minBufferTime() {
+    return this.#minBufferTime;
+  }
+  set minBufferTime(val) {
+    if (isFinite(val))
+      this.#minBufferTime = PTdurationToSeconds(val);
+  }
+  #minBufferTime = NaN;
+  /** 媒体阶段数组 */
+  get Period() {
+    return this.#Period;
+  }
+  #Period = [];
   constructor(mpdstring) {
     const mpd = new DOMParser().parseFromString(mpdstring, "text/xml").documentElement;
-    attributes(this, mpd);
-    childrens(this, mpd);
-  }
-  next() {
-    return this.Period[Symbol.iterator]().next().value;
-  }
-  minBufferTime = NaN;
-  mediaPresentationDuration = Infinity;
-  Period;
-}
-
-class MSE {
-  #mediaSource = new MediaSource();
-  get mediaSource() {
-    return this.#mediaSource;
-  }
-  videoSourceTasks = [];
-  audioSourceTasks = [];
-  createObjectURL;
-  #videoSourceBuffer;
-  #audioSourceBuffer;
-  videoSourceBuffer;
-  audioSourceBuffer;
-  vpush;
-  apush;
-  set duration(val) {
-    this.#mediaSource.duration = val;
-  }
-  constructor() {
-    Reflect.defineProperty(this, "videoSourceBuffer", {
-      get() {
-        return this.#videoSourceBuffer;
-      },
-      set(val) {
-        if (val instanceof SourceBuffer) {
-          this.#videoSourceBuffer = val;
-          val.onupdate = () => {
-            if (this.#videoSourceBuffer?.updating === false)
-              this.videoSourceTasks?.shift()?.();
-          };
-        }
+    for (const attr of mpd.attributes) {
+      if (attr.localName === "mediaPresentationDuration") {
+        this.#mediaPresentationDuration = PTdurationToSeconds(attr.value);
+        continue;
       }
-    });
-    Reflect.defineProperty(this, "audioSourceBuffer", {
-      get() {
-        return this.#audioSourceBuffer;
-      },
-      set(val) {
-        if (val instanceof SourceBuffer) {
-          this.#audioSourceBuffer = val;
-          val.onupdate = () => {
-            if (this.#audioSourceBuffer?.updating === false)
-              this.audioSourceTasks?.shift()?.();
-          };
-        }
+      if (attr.localName === "minBufferTime") {
+        this.#minBufferTime = PTdurationToSeconds(attr.value);
+        continue;
       }
-    });
-    this.createObjectURL = () => {
-      return URL.createObjectURL(this.#mediaSource);
-    };
-    this.vpush = (fn) => {
-      this.videoSourceTasks.push(() => {
-        fn(this.#videoSourceBuffer);
-      });
-      if (this.#videoSourceBuffer?.updating === false)
-        this.videoSourceTasks?.shift()?.();
-    };
-    this.apush = (fn) => {
-      this.audioSourceTasks.push(() => {
-        fn(this.#audioSourceBuffer);
-      });
-      if (this.#audioSourceBuffer?.updating === false)
-        this.audioSourceTasks?.shift()?.();
-    };
-  }
-}
-
-const eventbus = class {
-  #Mpa = /* @__PURE__ */ new Map();
-  /** 添加事件 */
-  on(eventname, fn) {
-    if (eventname) {
-      if (this.#Mpa.has(eventname)) {
-        this.#Mpa.get(eventname)?.add(fn);
-      } else {
-        this.#Mpa.set(eventname, /* @__PURE__ */ new Set([fn]));
+      Reflect.set(this, attr.localName, attr.value);
+    }
+    for (const children of mpd.children) {
+      switch (children.localName) {
+        case "Period":
+          this.#Period.push(new Period(children));
+          break;
       }
     }
   }
-  /** 删除事件 */
-  off(eventname, fn) {
-    this.#Mpa.get(eventname)?.delete(fn);
-  }
-  /** 触发事件 */
-  trigger(eventname, ...params) {
-    if (this.#Mpa.has(eventname)) {
-      for (const iterator of this.#Mpa.get(eventname)) {
-        iterator(...params);
-      }
-    }
-  }
-};
-var VidoeDashEventType = /* @__PURE__ */ ((VidoeDashEventType2) => {
-  VidoeDashEventType2["TIMPE_UPDATE"] = "TIMPE_UPDATE";
-  VidoeDashEventType2["MANIFEST_LOADING_FINISHED"] = "MANIFEST_LOADING_FINISHED";
-  VidoeDashEventType2["PERIOD_SWITCH_STARTED"] = "PERIOD_SWITCH_STARTED";
-  VidoeDashEventType2["PERIOD_SWITCH_COMPLETED"] = "PERIOD_SWITCH_COMPLETED";
-  VidoeDashEventType2["BUFFER_FETCH_STATE"] = "BUFFER_FETCH_STATE";
-  VidoeDashEventType2["BUFFER_FETCH_END"] = "BUFFER_FETCH_END";
-  VidoeDashEventType2["BUFFER_PUSH_MEDIASTREAM"] = "BUFFER_PUSH_MEDIASTREAM";
-  VidoeDashEventType2["BUFFER_PUSH_INITSTREAM"] = "BUFFER_PUSH_INITSTREAM";
-  VidoeDashEventType2["SOURCEBUFFERUPDATEEND"] = "SOURCEBUFFERUPDATEEND";
-  VidoeDashEventType2["QUALITY_CHANGE_REQUESTED"] = "QUALITY_CHANGE_REQUESTED";
-  return VidoeDashEventType2;
-})(VidoeDashEventType || {});
+}
 
-class VideoDashPrivate {
-  #el;
-  get el() {
-    return this.#el;
-  }
-  #url;
-  #MPD;
-  #Period;
-  #RepresentationVideo;
-  #RepresentationAudio;
-  #eventbus = new eventbus();
-  #options = {
-    minBufferTime: 200,
-    parseinit: (r) => {
-      return r?.SegmentTemplate?.initialization?.replaceAll("$RepresentationID$", r.id ?? "") ?? "";
+const fetchMpd = async (url, options) => {
+  return fetch(url).then(
+    async (c) => {
+      if (c.ok) {
+        return Object.assign(new MPD(await c.text()), options);
+      }
+      return void 0;
     },
-    parsemedia(r, currentIndex) {
-      let mediaRegExecArray = r.mediaRegExecArray;
-      if (!mediaRegExecArray) {
-        mediaRegExecArray = /\$Number(.*)\$/.exec(
-          r?.SegmentTemplate?.media?.replaceAll("$RepresentationID$", r?.id ?? "") ?? ""
-        );
-        Reflect.defineProperty(r, "mediaRegExecArray", { get() {
-          return mediaRegExecArray;
-        } });
-      }
-      switch (mediaRegExecArray?.[1]) {
-        case "%05d":
-          return mediaRegExecArray.input.replace(mediaRegExecArray[0], (Array(5).join("0") + currentIndex).slice(-5)) ?? "";
-        default:
-          return mediaRegExecArray?.input.replace(mediaRegExecArray[0], currentIndex.toString()) ?? "";
-      }
+    () => void 0
+  );
+};
+const debounce = (callback, delay = 200) => {
+  let t;
+  return (...e) => {
+    clearTimeout(t);
+    t = setTimeout(() => {
+      callback(e);
+    }, delay);
+  };
+};
+const throttle = (callback, duration = 200) => {
+  let lastTime = (/* @__PURE__ */ new Date()).getTime();
+  return (...e) => {
+    let now = (/* @__PURE__ */ new Date()).getTime();
+    if (now - lastTime > duration) {
+      callback(e);
+      lastTime = now;
     }
   };
-  constructor(id, options = {}) {
-    Object.assign(this.#options, options);
-    const mse = new MSE();
-    this.#el = typeof id === "string" ? document.getElementById(id) : id;
-    const trigger_BUFFER_PUSH_MEDIASTREAM = ((duration) => {
-      let lastTime = (/* @__PURE__ */ new Date()).getTime();
-      return (isseek = false) => {
-        let now = (/* @__PURE__ */ new Date()).getTime();
-        if (now - lastTime > duration) {
-          if (mse.mediaSource.readyState === "open" || isseek) {
-            console.log("trigger_BUFFER_PUSH_MEDIASTREAM....", this.el.currentTime, isseek);
-            this.#eventbus.trigger(VidoeDashEventType.BUFFER_PUSH_MEDIASTREAM, this.#RepresentationVideo);
-            this.#eventbus.trigger(VidoeDashEventType.BUFFER_PUSH_MEDIASTREAM, this.#RepresentationAudio);
-            lastTime = now;
-          }
-        }
-      };
-    })(2e3);
-    this.#el.addEventListener("timeupdate", () => {
-      trigger_BUFFER_PUSH_MEDIASTREAM();
-    });
-    this.#el.addEventListener("seeking", () => {
-      console.log("跳转中.....");
-      trigger_BUFFER_PUSH_MEDIASTREAM(true);
-    });
-    const download = new class {
-      #speed = NaN;
-      get speed() {
-        return this.#speed;
-      }
-      start() {
-        return new class {
-          #startTime = (/* @__PURE__ */ new Date()).getTime();
-          /** 结束速率检测 */
-          end(downloadSize) {
-            const endTime = (/* @__PURE__ */ new Date()).getTime();
-            const duration = (endTime - this.#startTime) / 1e3;
-            const speedBps = downloadSize * 8 / duration;
-            return speedBps;
-          }
-        }();
-      }
-    }();
-    const endOfStream = () => {
-      if (mse.videoSourceBuffer?.updating || mse.audioSourceBuffer?.updating || mse.mediaSource.readyState == "ended")
-        return;
-      if (mse.videoSourceBuffer?.buffered?.length > 0 && mse.audioSourceBuffer?.buffered?.length > 0) {
-        let videoEndTime = mse.videoSourceBuffer?.buffered.end(mse.videoSourceBuffer?.buffered?.length - 1);
-        let audioEndTime = mse.audioSourceBuffer?.buffered.end(mse.audioSourceBuffer?.buffered?.length - 1);
-        if (videoEndTime >= mse.mediaSource.duration - 1 && audioEndTime >= mse.mediaSource.duration - 1) {
-          mse.mediaSource.endOfStream();
-        }
-      }
-    };
-    mse.mediaSource.addEventListener("sourceopen", () => {
-      mse.duration = this.#MPD.mediaPresentationDuration;
-      this.#Period = this.#MPD?.next();
-      if ((this.#Period?.AdaptationSetVideo?.Representation.length ?? 0) > 0) {
-        mse.videoSourceBuffer = mse.mediaSource.addSourceBuffer('video/mp4; codecs="av01.0.08M.08"');
-        mse.videoSourceBuffer.onupdateend = endOfStream;
-        mse.videoSourceBuffer.addEventListener("updateend", () => {
-          this.#eventbus.trigger(VidoeDashEventType.SOURCEBUFFERUPDATEEND, this.#RepresentationVideo);
-          this.#eventbus.trigger(VidoeDashEventType.BUFFER_PUSH_MEDIASTREAM, this.#RepresentationVideo);
-        });
-      }
-      if ((this.#Period?.AdaptationSetAudio?.Representation.length ?? 0) > 0) {
-        mse.audioSourceBuffer = mse.mediaSource.addSourceBuffer('audio/mp4; codecs="mp4a.40.2"');
-        mse.audioSourceBuffer.onupdateend = endOfStream;
-        mse.audioSourceBuffer.addEventListener("updateend", () => {
-          this.#eventbus.trigger(VidoeDashEventType.SOURCEBUFFERUPDATEEND, this.#RepresentationAudio);
-          this.#eventbus.trigger(VidoeDashEventType.BUFFER_PUSH_MEDIASTREAM, this.#RepresentationAudio);
-        });
-      }
-      this.#eventbus.trigger(VidoeDashEventType.PERIOD_SWITCH_STARTED);
-    }, { once: true });
-    this.#eventbus.on(VidoeDashEventType.MANIFEST_LOADING_FINISHED, () => {
-      if (mse.mediaSource.readyState === "open") {
-        mse.mediaSource.endOfStream();
-      }
-      this.#el.src = mse.createObjectURL();
-    });
-    this.#eventbus.on(VidoeDashEventType.PERIOD_SWITCH_STARTED, () => {
-      this.SetQuality("video", 0);
-      this.SetQuality("audio", -1);
-    });
-    const sourceTasksPushBuffer = (arrt, mediatype) => {
-      switch (mediatype) {
-        case "video":
-          mse.vpush((sourceBuffer) => {
-            sourceBuffer?.appendBuffer(arrt);
-          });
-          break;
-        case "audio":
-          mse.apush((sourceBuffer) => {
-            sourceBuffer?.appendBuffer(arrt);
-          });
-          break;
-      }
-    };
-    this.#eventbus.on(VidoeDashEventType.BUFFER_PUSH_INITSTREAM, (representation) => {
-      if (representation.initstream) {
-        sourceTasksPushBuffer(representation.initstream, representation.mediaType);
-      } else {
-        if (representation.SegmentTemplate?.initialization && representation.id) {
-          fetch(new URL(this.#options.parseinit(representation), this.#url)).then((arr) => arr.arrayBuffer()).then((ab) => {
-            Reflect.defineProperty(representation, "initstream", {
-              value: new Uint8Array(ab),
-              writable: false,
-              enumerable: false,
-              configurable: false
-            });
-            sourceTasksPushBuffer(representation.initstream, representation.mediaType);
-          });
-        }
-      }
-    });
-    const GetBufferMediaNumber = (representation) => {
-      const buffered = representation.buffered;
-      const computedDuratio = representation?.computedDuratio ?? Infinity;
-      const maxDurationTiem = this.#MPD?.mediaPresentationDuration ?? Infinity;
-      const maxDurationNumber = Math.ceil(maxDurationTiem / computedDuratio);
-      const minBufferTime = this.#options.minBufferTime;
-      const startNumber = representation?.SegmentTemplate?.startNumber ?? 1;
-      const buffer = {
-        currentNumber: representation.currentfetchindex ?? 0,
-        currentTime: this.#el.currentTime,
-        StartTime: 0,
-        EndTime: 0,
-        /** 应该缓冲数量 */
-        bufferNumber: NaN
-      };
-      for (let index = 0; index < (buffered?.length ?? 0); index++) {
-        buffer.EndTime = buffered?.end(index) ?? 0;
-        buffer.StartTime = buffered?.start(index) ?? 0;
-        if (buffer.EndTime >= buffer.currentTime) {
-          if (buffer.currentTime >= buffer.StartTime) {
-            buffer.bufferNumber = Math.ceil(
-              (minBufferTime - (buffer.EndTime - buffer.currentTime)) / computedDuratio
-            );
-            buffer.currentTime = buffer.EndTime;
-          }
-          break;
-        }
-      }
-      if (buffer.bufferNumber > 0) {
-        buffer.currentNumber++;
-        if (buffer.currentNumber < maxDurationNumber) {
-          representation.currentfetchindex = buffer.currentNumber;
-          return new URL(this.#options.parsemedia(representation, buffer.currentNumber + startNumber), this.#url);
-        }
-      } else if (isNaN(buffer.bufferNumber)) {
-        buffer.currentNumber = Math.floor(buffer.currentTime / computedDuratio);
-        representation.currentfetchindex = buffer.currentNumber;
-        return new URL(this.#options.parsemedia(representation, buffer.currentNumber + startNumber), this.#url);
-      }
-    };
-    this.#eventbus.on(VidoeDashEventType.BUFFER_PUSH_MEDIASTREAM, (representation) => {
-      const controller = new AbortController();
-      const speedtime = download.start();
-      const mediaUrlNumber = GetBufferMediaNumber(representation);
-      if (mediaUrlNumber) {
-        representation?.currentfetchabort?.();
-        representation.currentfetchabort = () => {
-          controller.abort();
-        };
-        this.#eventbus.trigger(VidoeDashEventType.BUFFER_FETCH_STATE, representation, controller);
-        fetch(mediaUrlNumber, { signal: controller.signal }).then((r) => {
-          if (r.status < 400) {
-            return r.arrayBuffer();
-          }
-          throw r;
-        }).then((arr) => {
-          sourceTasksPushBuffer(new Uint8Array(arr), representation.mediaType);
-          this.#eventbus.trigger(VidoeDashEventType.BUFFER_FETCH_END, representation, speedtime.end(arr.byteLength));
-        }).catch(() => {
-        }).finally(() => {
-        });
-      }
-    });
-    const mediaNumber = /\$Number(.*)\$/;
-    this.#eventbus.on(VidoeDashEventType.QUALITY_CHANGE_REQUESTED, (mediatype, index, isRemovesourceBuffer = false) => {
-      switch (mediatype) {
-        case "video":
-          this.#RepresentationVideo?.currentfetchabort?.();
-          this.#RepresentationVideo = this.#Period?.AdaptationSetVideo?.Representation.at(index);
-          if (this.#RepresentationVideo) {
-            if (!Reflect.has(this.#RepresentationVideo, "SegmentTemplate")) {
-              Reflect.defineProperty(this.#RepresentationVideo, "SegmentTemplate", {
-                get: () => {
-                  return this.#Period?.AdaptationSetVideo?.SegmentTemplate;
-                },
-                enumerable: false
-              });
-            }
-            if (!Reflect.has(this.#RepresentationVideo, "mediaRegExecArray")) {
-              Reflect.defineProperty(this.#RepresentationVideo, "mediaRegExecArray", {
-                value: mediaNumber.exec(
-                  this.#RepresentationVideo?.SegmentTemplate?.media?.replaceAll("$RepresentationID$", this.#RepresentationVideo?.id ?? "") ?? ""
-                )
-              });
-            }
-            if (!Reflect.has(this.#RepresentationVideo, "buffered")) {
-              Reflect.defineProperty(this.#RepresentationVideo, "buffered", { get() {
-                return mse.videoSourceBuffer.buffered;
-              } });
-            }
-            this.#RepresentationVideo.computedDuratio ??= Number((this.#RepresentationVideo?.SegmentTemplate?.duration && this.#RepresentationVideo?.SegmentTemplate?.timescale ? Math.round((this.#RepresentationVideo?.SegmentTemplate?.duration ?? 0) / (this.#RepresentationVideo?.SegmentTemplate?.timescale ?? 0)) : this.#RepresentationVideo?.SegmentTemplate?.duration ?? 0).toFixed(2));
-            if (isRemovesourceBuffer)
-              mse.vpush((sourceBuffer) => {
-                sourceBuffer.remove(0, this.#el.currentTime + 1);
-              });
-            mse.vpush((sourceBuffer) => {
-              if (sourceBuffer) {
-                sourceBuffer?.changeType(
-                  `${this.#RepresentationVideo?.mimeType ?? "video/mp4"}; codecs="${this.#RepresentationVideo?.codecs}"`
-                );
-                this.#eventbus.trigger(VidoeDashEventType.BUFFER_PUSH_INITSTREAM, this.#RepresentationVideo);
+};
+class SourceBufferTask {
+  #SourceBuffer;
+  #Url;
+  #MPD;
+  #tasks = { list: [], a: () => {
+  } };
+  #arrayBuffers = [];
+  #Rep;
+  /** 最近一个文件下载的比特率 */
+  get bitrate() {
+    return this.#bitrate;
+  }
+  #bitrate = NaN;
+  #runTask(tasks) {
+    tasks.forEach((t) => {
+      this.#tasks.list.push(
+        () => {
+          const d = performance.now();
+          fetch(t.url).then((f) => f.arrayBuffer()).then((a) => {
+            try {
+              this.#bitrate = Math.round(a.byteLength * 8 / (performance.now() - d));
+              if (this.#SourceBuffer.updating) {
+                this.#arrayBuffers.push(new Uint8Array(a));
+              } else {
+                this.#SourceBuffer?.appendBuffer(new Uint8Array(a));
               }
-            });
-          }
-          break;
-        case "audio":
-          this.#RepresentationAudio?.currentfetchabort?.();
-          this.#RepresentationAudio = this.#Period?.AdaptationSetAudio?.Representation.at(-1) ?? {};
-          if (this.#RepresentationAudio) {
-            if (!this.#RepresentationAudio?.SegmentTemplate) {
-              Reflect.defineProperty(this.#RepresentationAudio, "SegmentTemplate", {
-                get: () => {
-                  return this.#Period?.AdaptationSetAudio?.SegmentTemplate;
-                },
-                enumerable: false
-              });
+            } catch {
             }
-            if (!Reflect.has(this.#RepresentationAudio, "mediaRegExecArray")) {
-              Reflect.defineProperty(this.#RepresentationAudio, "mediaRegExecArray", {
-                value: mediaNumber.exec(
-                  this.#RepresentationAudio?.SegmentTemplate?.media?.replaceAll("$RepresentationID$", this.#RepresentationAudio?.id ?? "") ?? ""
-                )
-              });
-            }
-            if (!Reflect.has(this.#RepresentationAudio, "buffered")) {
-              Reflect.defineProperty(this.#RepresentationAudio, "buffered", { get() {
-                return mse.audioSourceBuffer.buffered;
-              } });
-            }
-            this.#RepresentationAudio.computedDuratio ??= this.#RepresentationAudio?.SegmentTemplate?.duration && this.#RepresentationAudio?.SegmentTemplate?.timescale ? (this.#RepresentationAudio?.SegmentTemplate?.duration ?? Infinity) / (this.#RepresentationAudio?.SegmentTemplate?.timescale ?? Infinity) : this.#RepresentationAudio?.SegmentTemplate?.duration ?? Infinity;
-            if (isRemovesourceBuffer)
-              mse.apush((sourceBuffer) => {
-                sourceBuffer.remove(0, this.#el.currentTime + 1);
-              });
-            mse.apush((sourceBuffer) => {
-              if (sourceBuffer) {
-                sourceBuffer?.changeType(
-                  `${this.#RepresentationAudio?.mimeType ?? "audio/mp4"}; codecs="${this.#RepresentationAudio?.codecs ?? "mp4a.40.2"}"`
-                );
-                this.#eventbus.trigger(VidoeDashEventType.BUFFER_PUSH_INITSTREAM, this.#RepresentationAudio);
-              }
-            });
-          }
-          break;
-      }
+          });
+        }
+      );
     });
-  }
-  on(eventname, fn) {
-    this.#eventbus.on(eventname, fn);
-  }
-  /** 设定画质 */
-  SetQuality(mediatype, index, isRemovesourceBuffer = false) {
-    this.#eventbus.trigger(VidoeDashEventType.QUALITY_CHANGE_REQUESTED, mediatype, index, isRemovesourceBuffer);
-  }
-  GetQuality(mediatype) {
-    switch (mediatype) {
-      case "video":
-        return this.#RepresentationVideo;
-      case "audio":
-        return this.#RepresentationAudio;
-      default:
-        return void 0;
+    if (this.#SourceBuffer.updating == false) {
+      this.#tasks.list.shift()?.();
     }
   }
-  GetQualityList(mediatype) {
-    switch (mediatype) {
-      case "video":
-        return this.#Period?.AdaptationSetVideo?.Representation;
-      case "audio":
-        return this.#Period?.AdaptationSetAudio?.Representation;
-      default:
-        return void 0;
+  /** 重新设置 rep，需要 mimeType/codecs属性一样才会设置成功*/
+  setRep(rep, url) {
+    if (this.#Rep?.mimeType !== rep.mimeType || this.#Rep?.codecs !== rep.codecs) {
+      this.#SourceBuffer.changeType(`${rep?.mimeType}; codecs="${rep?.codecs}"`);
+      if (rep?.initialization) {
+        this.#runTask([{ url: new URL(rep.initialization, this.#Url) }]);
+      }
     }
+    this.#Rep = rep;
+    if (url)
+      this.#Url = url;
   }
-  /** 装载MPD文件 */
-  loader(url) {
-    this.#url = url instanceof URL ? url : new URL(url, window.location.href);
-    fetch(url).then((c) => {
-      if (c.status < 400)
-        return c.text();
-      throw c;
-    }).then((c) => {
-      this.#MPD = new MPD3(c);
-      this.#eventbus.trigger(VidoeDashEventType.MANIFEST_LOADING_FINISHED);
+  addTask(timeupdate, mediaPresentationDuration, Ignorebuffered = false) {
+    if (!this.#Rep)
+      return;
+    const bufferTime = Number.isFinite(this.#MPD.minBufferTime) ? timeupdate + this.#MPD.minBufferTime : timeupdate;
+    const irep = Math.ceil((bufferTime > mediaPresentationDuration ? mediaPresentationDuration : bufferTime) / this.#Rep.duration);
+    let buffered = timeupdate;
+    if (Ignorebuffered === false) {
+      for (let index = 0; index < this.#SourceBuffer?.buffered.length; index++) {
+        if (this.#SourceBuffer.buffered.start(index) < timeupdate) {
+          buffered = this.#SourceBuffer.buffered.end(index);
+        }
+        if (buffered > bufferTime)
+          return;
+      }
+    } else if (Ignorebuffered === true) {
+      this.#tasks.list.length = 0;
+    }
+    if (Math.abs(mediaPresentationDuration - buffered) < (this.#Rep?.duration ?? 2) / 2)
+      return;
+    const tasks = [];
+    let segment = this.#Rep.skip(timeupdate > buffered ? timeupdate : buffered);
+    if (Ignorebuffered === false && segment.count > this.#Rep.startNumber)
+      segment = segment.next();
+    while (segment.media && segment.count <= irep) {
+      const url = new URL(segment.media, this.#Url);
+      tasks.push({ url, duration: segment.duration });
+      segment = segment.next();
+    }
+    this.#runTask(tasks);
+  }
+  constructor(mse, mpd, url) {
+    this.#SourceBuffer = mse.addSourceBuffer(`video/mp4; codecs="avc1.64001f"`);
+    this.#Url = url;
+    this.#MPD = mpd;
+    console.log("SourceBufferTask", this.#MPD);
+    mse.addEventListener("sourceclose", () => {
+      this.#tasks.list.length = 0;
+    });
+    this.#SourceBuffer.addEventListener("updateend", () => {
+      const arrayBuffer = this.#arrayBuffers.shift();
+      if (arrayBuffer)
+        this.#SourceBuffer?.appendBuffer(arrayBuffer);
+      this.#tasks.list.shift()?.();
     });
   }
 }
-
-class Elextend {
-  constructor(el) {
-    this.#el = el;
-  }
-  #el;
-  #options;
-  get options() {
-    return this.#options;
-  }
-  set options(val) {
-    val?.setup?.(this.#el);
-    this.#options = val;
-  }
+class VideoDash {
   get el() {
     return this.#el;
   }
-  set el(el) {
-    this.options?.setup?.(el);
-    this.#el = el;
+  #el;
+  #MSE = new MediaSource();
+  #MPD;
+  #options = new class {
+    get minBufferTime() {
+      return this.#minBufferTime;
+    }
+    set minBufferTime(val) {
+      this.#minBufferTime = isFinite(val) ? val : this.#minBufferTime;
+    }
+    #minBufferTime = NaN;
+  }();
+  #videoSourceBufferTask;
+  #audioSourceBufferTask;
+  /** 最近视频下载比特率 */
+  get videoBitrate() {
+    return this.#videoSourceBufferTask?.bitrate ?? NaN;
   }
-  cb() {
-    this.options?.cb?.(this.#el);
+  /** 最近音频下载比特率 */
+  get audioBitrate() {
+    return this.#audioSourceBufferTask?.bitrate ?? NaN;
   }
-}
-class VideoControllerbar {
-  #SetProperty(el) {
-    const elextend = new Elextend(el);
-    return (ext) => {
-      if (ext instanceof HTMLElement) {
-        elextend.el = ext;
-      } else if (ext instanceof Function) {
-        ext(elextend.el);
-      } else if (typeof ext === "object") {
-        elextend.options = ext;
-      } else {
-        elextend?.cb?.();
-      }
-    };
+  /** 返回视频Rep集 */
+  get videoSet() {
+    return this.#videoSet;
   }
-  videoDiv;
-  el;
-  constructor(videoplayer, ViodeDash2) {
-    const videoDiv = (typeof videoplayer === "string" ? document.getElementById(videoplayer) : videoplayer) ?? document.querySelector(`[${videoplayer}]`);
-    this.videoDiv = this.#SetProperty(videoDiv);
-    this.el = this.#SetProperty(ViodeDash2.el);
-    return new Proxy(this, {
-      get(target, prop) {
-        if (!Reflect.has(target, prop)) {
-          const el = videoDiv.querySelector(`[${prop.toString()}]`) || videoDiv.querySelector(`#${prop.toString()}`) || videoDiv.querySelector(`.${prop.toString()}`);
-          if (el)
-            Reflect.set(target, prop, target.#SetProperty(el));
+  #videoSet = [];
+  get audioSet() {
+    return this.#audioSet;
+  }
+  #audioSet = [];
+  constructor(id, options = {}) {
+    Object.assign(this.#options, options);
+    this.#el = typeof id === "string" ? document.getElementById(id) : id;
+    this.#el.addEventListener("seeking", debounce(() => {
+      this.#videoSourceBufferTask?.addTask?.(this.#el.currentTime, this.#MSE.duration);
+      this.#audioSourceBufferTask?.addTask?.(this.#el.currentTime, this.#MSE.duration);
+    }, 500));
+    this.#el.addEventListener("timeupdate", throttle(() => {
+      if (this.#MSE.readyState === "open") {
+        this.#videoSourceBufferTask?.addTask?.(this.#el.currentTime, this.#MSE.duration);
+        this.#audioSourceBufferTask?.addTask?.(this.#el.currentTime, this.#MSE.duration);
+        if (Math.abs(this.#MSE.duration - this.#el.currentTime) < 2) {
+          this.#MSE.endOfStream();
         }
-        return Reflect.get(target, prop);
-      },
-      set() {
-        return false;
       }
+    }, 2500));
+  }
+  #URL = new URL(window.location.href);
+  /** 装载MPD文件 异步*/
+  loaderAsync(addr) {
+    this.#videoSet.length = 0;
+    this.#audioSet.length = 0;
+    this.#videoSourceBufferTask = void 0;
+    this.#audioSourceBufferTask = void 0;
+    return new Promise(async (r) => {
+      if (this.#el.error)
+        return r(false);
+      this.#URL = addr instanceof URL ? addr : new URL(addr, this.#URL);
+      this.#MPD = await fetchMpd(this.#URL, this.#options);
+      if (!this.#MPD)
+        return r(false);
+      this.#options.minBufferTime = isFinite(this.#options.minBufferTime) ? this.#options.minBufferTime : this.#MPD.minBufferTime;
+      const sourceopen = () => {
+        if (this.#MPD?.mediaPresentationDuration && isFinite(this.#MPD.mediaPresentationDuration) && !isFinite(this.#MSE.duration)) {
+          this.#MSE.duration = this.#MPD.mediaPresentationDuration;
+        }
+        this.#videoSourceBufferTask = new SourceBufferTask(this.#MSE, this.#MPD, this.#URL);
+        this.#audioSourceBufferTask = new SourceBufferTask(this.#MSE, this.#MPD, this.#URL);
+        (this.#MPD?.Period?.[0].videoSet ?? []).forEach((v) => this.#videoSet.push({
+          bandwidth: v.bandwidth,
+          width: v.width,
+          height: v.height,
+          mimeType: v.mimeType,
+          switch: (Ignorebuffered = false) => {
+            if (this.#videoSourceBufferTask) {
+              this.#videoSourceBufferTask?.setRep(v);
+              this.#videoSourceBufferTask?.addTask(this.el.currentTime, this.#el.duration, Ignorebuffered);
+              return true;
+            }
+            return false;
+          }
+        }));
+        (this.#MPD?.Period?.[0].audioSet ?? []).forEach((v) => this.#audioSet.push({
+          bandwidth: v.bandwidth,
+          mimeType: v.mimeType,
+          switch: (Ignorebuffered = false) => {
+            if (this.#audioSourceBufferTask) {
+              this.#audioSourceBufferTask?.setRep(v);
+              this.#audioSourceBufferTask?.addTask(this.#el.currentTime, this.#el.duration, Ignorebuffered);
+              return true;
+            }
+            return false;
+          }
+        }));
+        this.#MSE.removeEventListener("sourceopen", sourceopen);
+        return r(true);
+      };
+      this.#MSE.addEventListener("sourceopen", sourceopen);
+      this.#el.src = URL.createObjectURL(this.#MSE);
     });
   }
 }
 
-export { MPD3, VideoControllerbar, VideoDashPrivate as VideoDash, VidoeDashEventType as VideoDashEventType, eventbus };
+export { VideoDash };

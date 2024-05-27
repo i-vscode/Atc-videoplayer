@@ -1,85 +1,49 @@
-    div[videoplayer] {
-        width: 100%; max-height: 600px;   position: relative; overflow: hidden; 
-        max-width: 1200px; display: flex;justify-content: center;
-        align-items: center;    
-    }
-    div[videoplayer]>video::-webkit-media-controls-enclosure{display: none;} 
-    div[videoplayer]>video:first-child{display: block;  width: 100%;height:100%;  
-        object-fit:contain;
-        
-        background-color:#000000;}
+div[videoplayer] {width: 100%; height: 600px; max-height: 600px;position: relative; overflow: hidden; 
+    max-width: 1200px;  justify-content: center;align-items: center; background-color:#000000; }
+div[videoplayer]>video::-webkit-media-controls-enclosure{display: none;}
+div[videoplayer] *{display: block;}
+/* video */
+div[videoplayer]>video{display: block;  width: 100%;  height: auto;object-fit:contain;  background-color:#000000;}
+div[videoplayer]>video>div{
+    position: absolute;
+    z-index: 1000;
+    background: yellow;
+}
+/* 控制栏*/ 
+div[videoplayer]>controllerbar{transition: all 1s; position: absolute; color: #fff;
+ left: 0;right: 0; bottom: 0;height: 3rem; width: 100%; z-index: 100;opacity: 1;}
+div[videoplayer]>controllerbar.hide{ bottom:calc(-3rem + 3px);}
+div[videoplayer]>controllerbar.hide2{opacity: 0;} 
 
-    /* 信息框*/
-    div[videoplayer]>div[message_box]{
-        position: absolute;
-        left:50%;top: 50%;transform: translate(-50%, -50%);
-        display: flex;width:120px;height:120px;flex-wrap: nowrap;justify-content: center;align-items: center;
-    }
-    /*信息播放按钮*/
-    div[videoplayer]>div[message_box]>button[message_box_played]{
-        width: 80%;   border: none;
-        height: 80%;
-        border-radius: 40% 0% 40% 40%;
-        box-shadow: 0px 0px 20px 10px #ffffff9d;
-        transition: all 1s;
-        background-color: #ffffff9d;
-        position: absolute;
-    }
-    div[videoplayer]>div[message_box]>button[message_box_played].hide{
-        width: 0;height: 0;opacity: 0;box-shadow: 0px 0px 90px 3px #ffffff9d;
-    }
-    div[videoplayer]>div[message_box]>svg[message_box_loading]{
-        width: 100%;   border: none;
-        height: 100%;
-        position: absolute;z-index: 1000;
-         fill:rgba(14, 25, 237, 0.877); 
-         transition: all 1s;
-         opacity: 0;
-         filter: drop-shadow(rgb(249, 254, 184) 0px 0px 4px );
-    }
-    div[videoplayer]>div[message_box]>svg[message_box_loading].show{
-        opacity: 1;
-    }
-    /* 控制栏*/
-    div[controllerbar] {transition: all 1s; position: absolute; color: #fff;
-        bottom: 0;height: 3rem; width: 100%; z-index: 100;opacity: 1;  }
-    div[controllerbar].hide{ bottom:calc(-3rem + 3px);}
-    div[controllerbar].hide2{opacity: 0;}
-    div[controllerbar]:before{position: absolute; width: 100%;height: 100%; z-index: -1;content:"";
-        background-color: rgba(0,0,0,0.6); }
+/* 时间线 */
+div[videoplayer] timelines{width: 100%; height: 4px; position: absolute;top:-4px;background-color: #000000ad;
+    border-top: rgba(255, 255, 255, 0.2) solid 1px; border-bottom: rgba(255, 255, 255, 0.2) solid 1px;transition: all .3s;}
+div[videoplayer] timelines:hover{height: 14px; top: -14px; cursor: pointer;} 
+div[videoplayer] timelines>timelinesprogress{width: 20%;height: 100%;background-color: #fff;display: block; }
+ 
+/* 按钮栏*/ 
+div[videoplayer] buttons{width: 100%;height: 100%;display: flex;flex-direction: row;
+    flex-wrap: nowrap;align-items: center;padding: 0.3rem; box-sizing: border-box}   
+div[videoplayer] buttons>*{display: flex;justify-content: center; align-items: center; 
+    transition: all 1s;padding: 0.2rem 0.5rem;cursor:pointer;flex-grow:0 ;}
+div[videoplayer] buttons>*:hover{ background-color: #ffffff88;}
+div[videoplayer] buttons>divider{display:block;width: 2px;background-color: #ffffffc1; padding: 0;cursor:default;
+    height: 80%;margin: 0 10px;box-shadow: 1px 1px 1px 0px #ffffff43; }
+div[videoplayer] buttons>placeholder{width: auto;cursor:default;}
+div[videoplayer] buttons>placeholder[full]{width: auto;flex-grow:2;cursor:default;}
+div[videoplayer] buttons>divider:hover{background-color: #ffffffc1; cursor:pointer;}
+div[videoplayer] buttons>placeholder:hover{background: none; }
 
+/* 信息框*/
+div[videoplayer] messagebox{position: absolute;left:50%;top: 50%;transform: translate(-50%, -50%);
+   width:100px;height:100px; display: flex;flex-wrap: nowrap;justify-content: center;align-items: center;}
+div[videoplayer] messagebox>*{ width: 100%; height: 100%; transition: all 1s; display: flex;flex-wrap: nowrap;justify-content: center;align-items: center;}
+/*信息播放按钮*/
+div[videoplayer] messagebox>played{background-color: #ffffff9d; cursor:pointer;}
+div[videoplayer] messagebox>played:hover{background-color: #ffffffdc; cursor:pointer;}
 
-    /* 时间线 */
-    div[controllerbar]>div.timelines{
-         width: 100%; height: 4px; position: absolute;top: -4px;background-color: #000000ad;
-         border-top: rgba(255, 255, 255, 0.2) solid 1px; border-bottom: rgba(255, 255, 255, 0.2) solid 1px;
-         transition: all .3s;
-    }
-    div[controllerbar]>div.timelines:hover{height: 14px; top: -14px; cursor: pointer;}
-    div[controllerbar]>div.timelines svg{height: 100%;width: 100%;position: absolute;}
-    div[controllerbar]>div.timelines svg[timeline] rect{ fill: rgb(139, 219, 0);}
-    div[controllerbar]>div.timelines svg[progress] rect{ fill: rgb(166, 14, 151);}
-    
-    /* 按钮栏*/
+@media screen and (max-width:420px) {
     div[controllerbar]>div.buttons >span.info{
-       display: flex;align-items: center; margin: 0 0.1rem;
-    }
-    div[controllerbar]>div.buttons{
-        width: 100%;height: 100%;display: flex;flex-direction: row;
-        flex-wrap: nowrap;align-items: stretch;padding: 0.3rem; box-sizing: border-box}    
-    div[controllerbar]>div.buttons>[Placeholder]{display: inline-block;flex-grow:1}
-    div[controllerbar]>div.buttons>button {
-        padding: 0 1rem;border: none;background-color: transparent;
-        color: #fff;cursor: pointer;        
-    }
-    div[controllerbar]>div.buttons>button:hover {
-        text-shadow:0px 0px 4px  #ffffff;
-    } 
-
-    @media screen and (max-width:420px) {
-
-        div[controllerbar]>div.buttons >span.info{
             display: none;
         }
-        
-    }
+}

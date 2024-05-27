@@ -1,4 +1,5 @@
-import type { VidoeDashEventType as eventType } from "./eventbus";
+import { VidoeDashEventType as eventType } from './eventbus';
+
 
 type opt = {
     /** 设置元素 */
