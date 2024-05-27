@@ -23,7 +23,6 @@ export declare class VideoDash {
         /** 视频媒体高度 */
         height: number;
         /** 切换使用此rep源
-         * @param timeupdate 要播放的开始时间，不能大于总时间，否则为 0
          * @param Ignorebuffered 默认false 是否忽略已经缓存的数据（软切换），直接使用新数据（强制切换）
         */
         switch(Ignorebuffered?: boolean | undefined): void;
@@ -35,7 +34,6 @@ export declare class VideoDash {
         mimeType: string;
         /***/
         /** 切换使用此rep源
-         * @param timeupdate 要播放的开始时间，不能大于总时间，否则为 0
          * @param Ignorebuffered 默认false 是否忽略已经缓存的数据（软切换），直接使用新数据（强制切换）
          */
         switch(Ignorebuffered?: boolean | undefined): void;

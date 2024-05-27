@@ -1,4 +1,6 @@
 
+//class Messagebox{}
+
 /** 控制栏按钮 */
 class Controllerbar {
     #video?: HTMLVideoElement
@@ -39,7 +41,7 @@ class Controllerbar {
 export class VideoController {
     #root?: HTMLDivElement;
     #video?: HTMLVideoElement;
-    #messagebox?: HTMLDivElement;
+    //#messagebox=new Messagebox();
     get controllerbar() { return this.#controllerbar }
     #controllerbar = new Controllerbar(this.#video,);
     constructor(id: string | HTMLDivElement,) {

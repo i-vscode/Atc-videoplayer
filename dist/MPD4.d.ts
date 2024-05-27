@@ -14,6 +14,8 @@ export type Segment = {
 };
 export type RepType = {
     video: {
+        /** id */
+        id: string;
         /** 初始分段文件 */
         initialization?: string;
         /** 编码器 */
@@ -32,6 +34,8 @@ export type RepType = {
         startNumber: number;
     } & Segment;
     audio: {
+        /** id */
+        id: string;
         /** 初始分段文件 */
         initialization?: string;
         /** 编码器 */
@@ -51,6 +55,8 @@ declare class Period {
     set start(val: number);
     /** 视频适配集 */
     get videoSet(): ({
+        /** id */
+        id: string;
         /** 初始分段文件 */
         initialization?: string | undefined;
         /** 编码器 */
@@ -70,6 +76,8 @@ declare class Period {
     } & Segment)[];
     /** 音频适配集 */
     get audioSet(): ({
+        /** id */
+        id: string;
         /** 初始分段文件 */
         initialization?: string | undefined;
         /** 编码器 */

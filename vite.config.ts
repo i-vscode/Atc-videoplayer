@@ -1,30 +1,25 @@
-import { defineConfig } from 'vite' 
-import dts from 'vite-plugin-dts'
-import { resolve } from 'path'
-
-export default defineConfig({ 
-  build: {
-    target:"esnext",  
-    lib: {
-      entry: "./lib/index.ts",
-      formats:["es"]
+import { defineConfig } from 'vite'
+import dts from 'vite-plugin-dts' 
+export default defineConfig({
+    build: {
+        target: "esnext",
+        lib: {
+            entry: "./lib/index.ts",
+            formats: ["es"]
+        },
+        copyPublicDir: false,
+        minify: false,
     },
-    copyPublicDir:false,
-    minify:false,
-  },
- 
-  server:{
-    open:true,
-    host: true,
-  },
-  plugins: [ 
-    dts({ 
-        outDir: "dist/@types", 
-        staticImport: false,
-        copyDtsFiles: true,
-        exclude: ["@src", "vue","entry"], 
-        //insertTypesEntry: true,
-        //rollupTypes:true
-    }),
-],
+    server: {
+        open: true,
+        host: true,
+    },
+    plugins: [
+        dts({
+            entryRoot:"./lib/", 
+            staticImport: false,
+            copyDtsFiles: true,
+            exclude: ["@src", "vue", "entry"], 
+        }),
+    ],
 })

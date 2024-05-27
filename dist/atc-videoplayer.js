@@ -304,6 +304,7 @@ class Period {
       v.representation.forEach((r) => {
         this.#videoSet.push({
           ...videoNext(r),
+          id: r.id,
           initialization: r.initialization,
           codecs: r.codecs,
           mimeType: r.mimeType,
@@ -318,6 +319,7 @@ class Period {
       a.representation.forEach((r) => {
         this.#audioSet.push({
           ...audioNext(r),
+          id: r.id,
           initialization: r.initialization,
           codecs: r.codecs,
           mimeType: r.mimeType,
@@ -492,7 +494,6 @@ class SourceBufferTask {
     this.#SourceBuffer = mse.addSourceBuffer(`video/mp4; codecs="avc1.64001f"`);
     this.#Url = url;
     this.#MPD = mpd;
-    console.log("SourceBufferTask", this.#MPD);
     mse.addEventListener("sourceclose", () => {
       this.#tasks.list.length = 0;
     });
@@ -612,4 +613,60 @@ class VideoDash {
   }
 }
 
-export { VideoDash };
+class Controllerbar {
+  #video;
+  get played() {
+    return this.#played;
+  }
+  set played(val) {
+    this.#played = val;
+    this.#played?.addEventListener("click", () => {
+      console.log("fewf", this.#video?.paused);
+      if (this.#video?.paused) {
+        this.#video?.play();
+      } else {
+        this.#video?.pause();
+      }
+    });
+  }
+  #played;
+  constructor(video, bar) {
+    this.#video = video;
+    for (const c of bar?.children ?? []) {
+      if (c.localName === "buttons") {
+        for (const button of c?.children ?? []) {
+          switch (button.localName) {
+            case "played":
+              this.played = button;
+              break;
+          }
+        }
+        continue;
+      }
+    }
+  }
+}
+class VideoController {
+  #root;
+  #video;
+  //#messagebox=new Messagebox();
+  get controllerbar() {
+    return this.#controllerbar;
+  }
+  #controllerbar = new Controllerbar(this.#video);
+  constructor(id) {
+    this.#root = typeof id === "string" ? document.getElementById(id) : id;
+    for (const children of this.#root.children) {
+      switch (children.localName) {
+        case "video":
+          this.#video = children;
+          break;
+        case "controllerbar":
+          this.#controllerbar = new Controllerbar(this.#video, children);
+          break;
+      }
+    }
+  }
+}
+
+export { VideoController, VideoDash };

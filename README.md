@@ -1,13 +1,13 @@
-# 一个轻量的网页dash流播放器
+# 一个轻量的网页dash流媒体播放器
 
 ## 说明
-目前暂不支持实时流，仅能播放采用DASH转码的视频。
+> 目前暂不支持实时流，仅能播放采用DASH转码的视频。
 
-使用 Typescript 和 vite 编写
+> 使用 Typescript 和 vite 编写
 
-没有使用任何第三方类库和依赖
+> 没有使用任何第三方类库和依赖
 
-暂无UI
+> 暂无UI
  
 ## 简单使用方法
  ```js 
@@ -32,16 +32,23 @@ dp.loaderAsync(url).then(b => {
 })
 ```
  ## VideoDash类说明
-  ```js
+
+ ```Html
+ <video width="800" height="600" id="video2">
+ ```
+  ```Js
   const dp = new VideoDash("video2")
 
-/**  装载 mpd文件 可多次调用，重新调用会替换旧mdp设置*/
+/** 装载 mpd文件 可多次调用，重新调用会替换旧mdp设置*/
 dp.loaderAsync();
-
 
   ```
 
 ## [更新](/CHANGELOG.md)
+
+### 0.1.2
+
+修复细节，调整编译配置
 
 ### 0.1.1
 
@@ -49,12 +56,9 @@ dp.loaderAsync();
 
 ### 0.1.0-alpha.1
 
- **重写VideoDash类**
-
- **重写MPD解析器**
-
+**重写VideoDash类 , 重写MPD解析器**
 
 ### 0.0.1-alpha.1
 
- *  创建初始版本
+**创建初始版本**
  

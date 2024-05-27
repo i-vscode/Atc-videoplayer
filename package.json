@@ -1,21 +1,15 @@
 {
   "name": "atc-videoplayer",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
-  "description": "atc播放器",
-  "keywords": [
-    "atc",
-    "播放器",
-    "dash"
-  ],
+  "description": "Atc Dash流媒体播放器",
+  "keywords": ["atc","流媒体","播放器","dash"],
   "license": "MIT",
-  "files": [
-    "dist"
-  ],
+  "files": ["dist"],
   "exports": {
     ".": {
       "import": "./dist/atc-videoplayer.js",
-      "types": "./dist/@types/lib/index.d.ts"
+      "types": "./dist/index.d.ts"
     }
   },
   "scripts": {
