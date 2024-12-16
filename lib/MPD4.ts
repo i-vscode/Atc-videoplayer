@@ -6,8 +6,6 @@ const reptms = /^PT(?:(\d+\.*\d*)H)?(?:(\d+\.*\d*)M)?(?:(\d+\.*\d*)S)?$/;
 
 /** PT时间段转换为秒 */
 const PTdurationToSeconds = (PT?: unknown) => {
-
-
     let hours = 0, minutes = 0, seconds = 0
     if (typeof PT === "string") {
         if (reptms.test(PT)) {
@@ -378,6 +376,8 @@ export class MPD {
     /** 最小缓存时间 */
     get minBufferTime() { return this.#minBufferTime }
     set minBufferTime(val) {
+        console.log("MPD4",val);
+        
         if (isFinite(val)) this.#minBufferTime = PTdurationToSeconds(val);
     }
     #minBufferTime = NaN

@@ -1,7 +1,6 @@
-
-//class Messagebox{}
-
-/** 控制栏按钮 */
+/**
+ * 播放器 控制器
+ */
 class Controllerbar {
     #video?: HTMLVideoElement
     get played() { return this.#played }

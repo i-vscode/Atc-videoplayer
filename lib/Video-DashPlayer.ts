@@ -10,6 +10,8 @@ export type VideoDashOptions = {
 const fetchMpd = async (url: URL, options: VideoDashOptions) => {
     return fetch(url).then(async c => {
         if (c.ok) {
+            console.log("fetchMpd",options);
+            
             //const mpd =  
             return Object.assign(new MPD(await c.text()), options)
         }
@@ -19,6 +21,7 @@ const fetchMpd = async (url: URL, options: VideoDashOptions) => {
         () => undefined
     )
 }
+/** 防抖 */
 const debounce = <Fn extends (...args: any) => void>(callback: Fn, delay: number = 200) => {
     let t: number | any
     return (...e: Parameters<Fn>) => {
@@ -26,6 +29,7 @@ const debounce = <Fn extends (...args: any) => void>(callback: Fn, delay: number
         t = setTimeout(() => { callback(e) }, delay);
     }
 }
+/** 节流 */
 const throttle = <Fn extends (...args: any) => void>(callback: Fn, duration: number = 200) => {
     let lastTime = new Date().getTime()
     return (...e: Parameters<Fn>) => {
@@ -36,23 +40,29 @@ const throttle = <Fn extends (...args: any) => void>(callback: Fn, duration: num
         }
     }
 }
-
+/**
+ * 源缓存任务类
+ */
 class SourceBufferTask {
     #SourceBuffer: SourceBuffer;
     #Url: URL;
     #MPD: MPD;
-    #tasks = { list: [], a: () => { } } as { list: Array<() => void>, a: () => void }
+    #tasks = { list: [], a: () => { } } as { list: Array<() => void>, a: () => void ; }
     #arrayBuffers = [] as Array<Uint8Array>
     #Rep: RepType["video"] | RepType["audio"] | undefined;
     /** 最近一个文件下载的比特率 */
-    get bitrate() { return this.#bitrate }
+    get bitrate() { return this.#bitrate } 
     #bitrate = NaN;
-    #runTask(tasks: Array<{ url: URL, duration?: number }>) {
+     #runTask(tasks: Array<{ url: URL, duration?: number }>) {
         tasks.forEach(t => {
             this.#tasks.list.push(
                 () => {
                     const d = performance.now();
-                    fetch(t.url).then(f => f.arrayBuffer()).then(a => {
+                    fetch(t.url).then(f =>{
+                        console.log("addfe",decodeURI(t.url.toString()), f.headers.get("Content-Length"));
+                        
+                       return f.arrayBuffer()
+                    } ).then(a => {
                         try {
                             this.#bitrate = Math.round(a.byteLength * 8 / (performance.now() - d));
                             if (this.#SourceBuffer.updating) {
@@ -65,25 +75,46 @@ class SourceBufferTask {
                 }
             )
         })
+        console.group("runTask",this.#Rep?.mimeType,Date.now());
+        this.#tasks.list.forEach(t=>{
+            console.log(t);
+            console.log(this.#tasks.list.length); 
+        })
+        console.groupEnd();
+        
         if (this.#SourceBuffer.updating == false) {
+            console.log("updating",this.#SourceBuffer.updating);            
             this.#tasks.list.shift()?.();
         }
     }
     /** 重新设置 rep，需要 mimeType/codecs属性一样才会设置成功*/
-    setRep(rep: RepType["video"] | RepType["audio"], url?: URL) {
+    async setRep(rep: RepType["video"] | RepType["audio"], url?: URL) {
+        if (url instanceof URL) this.#Url = url;
         if ((this.#Rep?.mimeType !== rep.mimeType || this.#Rep?.codecs !== rep.codecs)) {
             this.#SourceBuffer.changeType(`${rep?.mimeType}; codecs="${rep?.codecs}"`)
             if (rep?.initialization) {
-                this.#runTask([{ url: new URL(rep.initialization!, this.#Url) }])
+                this.#Rep = rep;
+             return   fetch(new URL(rep.initialization!, this.#Url)).then(f =>{
+                    console.log("setRep",decodeURI((new URL(rep.initialization!, this.#Url)).toString()), f.headers.get("Content-Length"));
+                   return f.arrayBuffer()
+                } ).then(a => {
+                    if (this.#SourceBuffer.updating) {
+                        this.#arrayBuffers.push(new Uint8Array(a))
+                    } else {
+                        this.#SourceBuffer?.appendBuffer(new Uint8Array(a))
+                    }
+                    return true
+                })
+                //this.#runTask([{ url: new URL(rep.initialization!, this.#Url) }])
             }
         }
-        this.#Rep = rep;
-        if (url) this.#Url = url;
+       
 
     }
     addTask(timeupdate: number, mediaPresentationDuration: number, Ignorebuffered: boolean = false) {
         if (!this.#Rep) return;
-        const bufferTime = Number.isFinite(this.#MPD.minBufferTime) ? timeupdate + this.#MPD.minBufferTime : timeupdate;
+       // const bufferTime = Number.isFinite(this.#MPD.minBufferTime) ? timeupdate + this.#MPD.minBufferTime : timeupdate;
+        const bufferTime =   timeupdate + 20
         const irep = Math.ceil((bufferTime > mediaPresentationDuration ? mediaPresentationDuration : bufferTime) / this.#Rep.duration)
         let buffered = timeupdate;
         if (Ignorebuffered === false) {
@@ -106,6 +137,8 @@ class SourceBufferTask {
         this.#runTask(tasks)
     }
     constructor(mse: MediaSource, mpd: MPD, url: URL,) {
+       
+        
         this.#SourceBuffer = mse.addSourceBuffer(`video/mp4; codecs="avc1.64001f"`)
         this.#Url = url;
         this.#MPD = mpd; 
@@ -114,8 +147,12 @@ class SourceBufferTask {
         // 源缓存对象 更新结束事件
         this.#SourceBuffer.addEventListener("updateend", () => {
             const arrayBuffer = this.#arrayBuffers.shift()
-            if (arrayBuffer) this.#SourceBuffer?.appendBuffer(arrayBuffer)
-            this.#tasks.list.shift()?.()
+            if (arrayBuffer) {
+                this.#SourceBuffer?.appendBuffer(arrayBuffer)
+            }else{
+                this.#tasks.list.shift()?.()
+            }
+          
         })
     }
 }
@@ -172,20 +209,20 @@ export class VideoDash {
     constructor(id: string | HTMLVideoElement, options: Partial<VideoDashOptions> = {}) {
         Object.assign(this.#options, options)
         this.#el = typeof id === "string" ? document.getElementById(id) as HTMLVideoElement : id;
-        this.#el.addEventListener("seeking", debounce(() => {
-            this.#videoSourceBufferTask?.addTask?.(this.#el.currentTime, this.#MSE.duration)
-            this.#audioSourceBufferTask?.addTask?.(this.#el.currentTime, this.#MSE.duration)
-            //clearInterval(endOfStream)
-        }, 500));
-        this.#el.addEventListener("timeupdate", throttle(() => {
-            if (this.#MSE.readyState === "open") {
-                this.#videoSourceBufferTask?.addTask?.(this.#el.currentTime, this.#MSE.duration)
-                this.#audioSourceBufferTask?.addTask?.(this.#el.currentTime, this.#MSE.duration);
-                if (Math.abs(this.#MSE.duration - this.#el.currentTime) < 2) {
-                    this.#MSE.endOfStream()
-                }
-            }
-        }, 2500));
+        // this.#el.addEventListener("seeking", debounce(() => {
+        //     this.#videoSourceBufferTask?.addTask?.(this.#el.currentTime, this.#MSE.duration)
+        //     this.#audioSourceBufferTask?.addTask?.(this.#el.currentTime, this.#MSE.duration)
+        //     //clearInterval(endOfStream)
+        // }, 500));
+        // this.#el.addEventListener("timeupdate", throttle(() => {
+        //     if (this.#MSE.readyState === "open") {
+        //         this.#videoSourceBufferTask?.addTask?.(this.#el.currentTime, this.#MSE.duration)
+        //         this.#audioSourceBufferTask?.addTask?.(this.#el.currentTime, this.#MSE.duration);
+        //         if (Math.abs(this.#MSE.duration - this.#el.currentTime) < 2) {
+        //             this.#MSE.endOfStream()
+        //         }
+        //     }
+        // }, 2500));
     }
     #URL = new URL(window.location.href)
     /** 装载MPD文件 异步*/
@@ -195,12 +232,18 @@ export class VideoDash {
 
         this.#videoSourceBufferTask = undefined
         this.#audioSourceBufferTask = undefined
-        return new Promise(async (r) => {
+        
+        return new Promise<boolean>(async (r) => {
             if (this.#el.error) return r(false)
             this.#URL = addr instanceof URL ? addr : new URL(addr, this.#URL);
-            this.#MPD = await fetchMpd(this.#URL, this.#options);
+            this.#MPD = await fetchMpd(this.#URL, this.#options); 
+            console.log("slll",this);
+            console.log(JSON.stringify(this.#MPD));
+            
+            console.log("mpd",this.#MPD,this.#options.minBufferTime);
+            
             if (!this.#MPD) return r(false);
-            this.#options.minBufferTime = isFinite(this.#options.minBufferTime) ? this.#options.minBufferTime : this.#MPD.minBufferTime;
+       //     this.#options.minBufferTime = isFinite(this.#options.minBufferTime) ? this.#options.minBufferTime : this.#MPD.minBufferTime;
             const sourceopen = () => {
                 if (this.#MPD?.mediaPresentationDuration && isFinite(this.#MPD.mediaPresentationDuration) && !isFinite(this.#MSE.duration)) {
                     this.#MSE.duration = this.#MPD.mediaPresentationDuration
@@ -227,7 +270,12 @@ export class VideoDash {
                     mimeType: v.mimeType,
                     switch: (Ignorebuffered = false) => {
                         if (this.#audioSourceBufferTask) {
-                            this.#audioSourceBufferTask?.setRep(v)
+                            this.#audioSourceBufferTask?.setRep(v).then(s=>{
+
+
+                                console.log("swww",s);
+                                
+                            })
                             this.#audioSourceBufferTask?.addTask(this.#el.currentTime, this.#el.duration, Ignorebuffered);
                             return true;
                         }
