@@ -29,7 +29,13 @@ const parseInitializationURL = (repid: string, url: URL, segmentElement?: Elemen
         segmentElement?.getElementsByTagName("Initialization")?.[0].getAttribute("sourceURL")
     return attributeValue ? new URL(attributeValue.replace("$RepresentationID$", repid), url) : undefined
 }
-const parseSegmentForMap = (() => {
+
+type RangeTimeURLType = Readonly<{
+    startTime: number,
+    endTime: number,
+    url: URL
+}>
+const parseSegmentFromRangeTimeURLs = (() => {
     const mediaReg = /\$Number%(\d+)d\$/;
     /** 除法结果四舍五入到整数 */
     const divideAndRound = (dividend: number | string | null, divisor: number | string | null) => {
@@ -37,20 +43,23 @@ const parseSegmentForMap = (() => {
         divisor = typeof divisor === "string" ? parseInt(divisor) : divisor; 0
         return Math.round((dividend ?? 0) / (divisor ?? 0))
     }
-    const parseSegmentTemplateForMap = (repid: string, url: URL, mediaPresentationDuration: number, segmentTemplateElement: Element) => {
+    const parseSegmentTemplateFromRangeTimeURLs = (repid: string, url: URL, mediaPresentationDuration: number, segmentTemplateElement: Element) => {
         const media = segmentTemplateElement.getAttribute("media")?.replace("$RepresentationID$", repid)
         const mediaRegExecArray = mediaReg.exec(media ?? "")
         const timescale = parseInt(segmentTemplateElement.getAttribute("timescale") ?? "")
         let startNumber = parseInt(segmentTemplateElement.getAttribute("startNumber") ?? "")
         const sElement = Array.from(segmentTemplateElement.getElementsByTagName("S"))
-        const map = new Map<[number, number], URL>();
+        const rangeTimeURLs = new Array<RangeTimeURLType>();
         if (Number.isFinite(timescale) && Number.isInteger(startNumber) && mediaPresentationDuration && mediaRegExecArray && media) {
             const mediaRegExecNumber = parseInt(mediaRegExecArray[1])
             let duration = divideAndRound(segmentTemplateElement.getAttribute("duration"), timescale)
             if (duration) {
                 for (startNumber; startNumber * duration < mediaPresentationDuration + duration; startNumber++) {
-                    map.set([startNumber * duration - duration, startNumber * duration],
-                        new URL(media.replace(mediaRegExecArray[0], (startNumber.toString().padStart(mediaRegExecNumber, "0"))), url))
+                    rangeTimeURLs.push(Object.freeze({
+                        startTime: startNumber * duration - duration,
+                        endTime: startNumber * duration,
+                        url: new URL(media.replace(mediaRegExecArray[0], (startNumber.toString().padStart(mediaRegExecNumber, "0"))), url)
+                    }))
                 }
             } else if (sElement.length > 0) {
                 duration = divideAndRound(sElement.at(0)?.getAttribute("t") ?? NaN, timescale);
@@ -60,54 +69,55 @@ const parseSegmentForMap = (() => {
                     srepeat = Number.isInteger(srepeat) && srepeat > 0 ? srepeat + 1 : 1
                     if (Number.isFinite(sduration) && Number.isFinite(duration)) {
                         while (srepeat-- > 0) {
-                            map.set([duration, sduration + duration],
-                                new URL(media.replace(mediaRegExecArray[0], ((startNumber++).toString().padStart(mediaRegExecNumber, "0"))), url));
+                            rangeTimeURLs.push(Object.freeze({
+                                startTime: duration,
+                                endTime: sduration + duration,
+                                url: new URL(media.replace(mediaRegExecArray[0], ((startNumber++).toString().padStart(mediaRegExecNumber, "0"))), url)
+                            }))
                             duration += sduration;
                         }
-                    } else { map.clear(); return map }
+                    } else { return new Array<RangeTimeURLType>() }
                 }
             }
         }
-        return map
+        return rangeTimeURLs
     }
-    const parseSegmentListForMap = (repid: string, url: URL, segmentTemplate: Element) => {
-        return new Map<[number, number], URL>()
+    const parseSegmentListFromRangeTimeURLs = (repid: string, url: URL, segmentTemplate: Element) => {
+        return new Array<RangeTimeURLType>()
     }
-    return (repid: string, url: URL, mediaPresentationDuration: number, segmentElement?: Element | null) => {
+    return (repid: string, url: URL, mediaPresentationDuration: number, segmentElement?: Element | null): Array<RangeTimeURLType> => {
         if (segmentElement?.localName === "SegmentTemplate") {
-            return parseSegmentTemplateForMap(repid, url, mediaPresentationDuration, segmentElement)
+            return parseSegmentTemplateFromRangeTimeURLs(repid, url, mediaPresentationDuration, segmentElement)
         } else if (segmentElement?.localName === "SegmentList") {
-            return parseSegmentListForMap(repid, url, segmentElement)
+            return parseSegmentListFromRangeTimeURLs(repid, url, segmentElement)
         }
-        return new Map<[number, number], URL>()
+        return new Array<RangeTimeURLType>()
     }
 })()
 
 /** 分段文件类 */
 class Segment {
-    #mpa: Map<[number, number], URL>
+    #rangeTimeURLs: Array<RangeTimeURLType>
     #initializationURL?: URL
     get initializationURL() { return this.#initializationURL }
     constructor(repId: string, url: URL, mediaPresentationDuration: number, segmentElement?: Element | null,) {
         this.#initializationURL = parseInitializationURL(repId, url, segmentElement);
-        this.#mpa = parseSegmentForMap(repId, url, mediaPresentationDuration, segmentElement)
+        this.#rangeTimeURLs = parseSegmentFromRangeTimeURLs(repId, url, mediaPresentationDuration, segmentElement)
 
     }
+    isLastURL(currentTime: number) {
+        const r = this.#rangeTimeURLs.at(-1);
+        return r ? currentTime > r.startTime && r.endTime ? true : false : true
+    }
     getSegmentRangeURLs(startTime: number, endTime: number) {
-        const urls = new Array()
-
-        for (const [range, value] of this.#mpa) {
-            const [rangeStart, reangeEnd] = range;
-            // console.log("Segment--getSegmentURLs --- if", startTime, endTime);
-            if (rangeStart > endTime) break
-            if (startTime <= reangeEnd && endTime >= rangeStart) {
-                urls.push(value)
+        const urls = new Set<URL>()
+        for (const r of this.#rangeTimeURLs) {
+            if (r.startTime > endTime) break
+            if (startTime <= r.endTime && endTime >= r.startTime) {
+                urls.add(r.url)
             }
         }
-        // console.group("Segment--getSegmentURLs --- return", startTime, endTime);
-        // console.log(urls);
-        // console.log(this.#mpa);
-        // console.groupEnd();
+        console.log("getSegmentRangeURLs", this.#rangeTimeURLs, startTime, endTime);
         return urls
     }
 }
@@ -150,56 +160,87 @@ class RepresentationMPD implements Representation {
             repElement.getElementsByTagName("SegmentTemplate")?.[0] ||
             repElement.getElementsByTagName("SegmentList")?.[0] ||
             segmentElement)
-        this.setRep = () => s.setRep(this)
+        this.setRep = (option) => s.setRep(this, option)
     }
     #segment: Segment;
     get initializationURL() { return this.#segment.initializationURL }
     getSegmentRangeURLs(startTime: number, endTime: number) { return this.#segment.getSegmentRangeURLs(startTime, endTime) }
-    setRep: () => boolean
+    isLastURL(currentTime: number) { return this.#segment.isLastURL(currentTime); }
+    setRep: Representation["setRep"]
 }
 
 /** SourceBuffer 为 ArrayBuffer 添加任务获取 */
 class SourceBufferAddTaskFetchForArrayBuffer {
-    #map = new Map<URL, any>()
-    #arrayBuffers = new Array<ArrayBuffer>()
+    #lastFetchSet = new Set<URL>()
+    #runingFetchSet = new Set<URL>()
+    #taskGroups = new Array<[() => void]>()
+    #tasks = new Array<() => void>()
+    #appendBufferTasks = new Array<() => void>()
     #sourceBuffer: SourceBuffer
-    #sourceclose: boolean = false
+    //#sourceclose: boolean = false
     get sourceBuffer() { return this.#sourceBuffer }
     constructor(sourceBuffer: SourceBuffer) {
         this.#sourceBuffer = sourceBuffer
         this.#sourceBuffer.addEventListener("updateend", () => {
-            console.log("uppd");
-
+            console.log("updateend");
             this.#run()
         })
     }
-    sourceclose() {
-        this.#sourceclose = true;
-        this.#map.clear()
+
+    endTask(f: () => void) {
+        this.#tasks.length = 0
+        this.#lastFetchSet.clear()
+        this.#runingFetchSet.clear()
+        console.log("endTask", this.#sourceBuffer.updating);
+        this.#tasks.push(f)
+        this.#run()
     }
-    #run(a?: ArrayBuffer) {
-        a = a ? a : this.#arrayBuffers.shift()
-        if (a && this.#sourceclose === false) {
-            if (this.#sourceBuffer.updating === false) {
-                this.#sourceBuffer.appendBuffer(a)
-            } else {
-                this.#arrayBuffers.push(a)
+    #run(t?: () => void) {
+        if (this.#sourceBuffer.updating === false) {
+            t?.() ?? this.#tasks.shift()?.();
+            return
+        } else if (t) {
+            this.#tasks.push(t)
+        }
+    }
+    add(urls?: Array<URL> | URL | (() => void) | Set<URL>) {
+        console.log("addtask", urls);
+
+        if (typeof urls === "function") {
+            this.#tasks.push(urls);
+            this.#run()
+            return
+        }
+        const newFetchSet = new Set(urls instanceof URL ? [urls] : urls instanceof Array || urls instanceof Set ? urls : []).difference(this.#lastFetchSet);
+        if (newFetchSet.size < 1) return
+
+        newFetchSet.forEach(url => {
+            if (url instanceof URL && !this.#runingFetchSet.has(url)) {
+                this.#runingFetchSet.add(url)
+                fetch(url).then(async r => {
+                    if (r.ok && this.#runingFetchSet.has(url)) {
+                        const a = await r.arrayBuffer()
+                        this.#tasks.push(() => { this.#sourceBuffer.appendBuffer(a) })
+                    }
+                }).finally(() => { this.#runingFetchSet.delete(url); this.#run() })
             }
+        })
+        this.#lastFetchSet = newFetchSet
+    }
+
+    changeType(type: string, option: Parameters<Representation["setRep"]>[0]) {
+        this.#sourceBuffer.changeType(type);
+        if (option?.cacheSwitchMode) {
+            if (option?.cacheSwitchMode === "radical") {
+                this.#tasks.length = 0
+                this.#tasks.push(() => { this.#sourceBuffer.abort() })
+                this.#runingFetchSet.clear()
+            }
+            // console.log("changeType", option?.cacheSwitchMode);
+            this.#tasks.push(() => { this.#sourceBuffer.remove(0, Infinity); })
+            this.#run()
         }
     }
-    #set(url?: URL) {
-        if (url instanceof URL && !this.#map.has(url)) {
-            this.#map.set(url, fetch(url)
-                .then(async r => { this.#run(await r.arrayBuffer()) })
-                .finally(() => { this.#map.delete(url) }))
-        }
-    }
-    add(urls?: Array<URL> | URL) {
-        if (Array.isArray(urls)) {
-            urls.forEach(url => this.#set(url))
-        } else { this.#set(urls) }
-    }
-    changeType(type: string) { return this.#sourceBuffer.changeType(type) }
 }
 /** 源缓存任务类 */
 class SourceBufferTask {
@@ -211,27 +252,29 @@ class SourceBufferTask {
     constructor(mse: MediaSource) {
         this.#mse = mse
         this.#sTask = new SourceBufferAddTaskFetchForArrayBuffer(mse.addSourceBuffer(`video/mp4; codecs="avc1.64001f"`))
-        mse.addEventListener("sourceclose", () => this.#sTask.sourceclose(), { once: true })
+        //  mse.addEventListener("sourceclose", () => this.#sTask.sourceclose(), { once: true })
     }
     /** 源缓存更新 */
-    async sourceBufferUpdate(currentTime: number, minBufferTime: number) {
+    sourceBufferUpdate(currentTime: number, minBufferTime: number) {
+
+        console.group("SourceBufferTask-sourceBufferUpdate", currentTime, minBufferTime, this.#mse.duration);
+        const { promise, resolve } = Promise.withResolvers();
         const timeRanges = this.#sTask.sourceBuffer.buffered;
-        let be = currentTime
-        minBufferTime = currentTime + minBufferTime; 
         for (let index = 0; index < timeRanges.length; index++) {
-            console.group("SourceBufferTask", currentTime);
-            console.log(timeRanges.start(index), timeRanges.end(index));
-            console.groupEnd();
+            console.log("timeRanges", timeRanges.start(index), timeRanges.end(index));
             if (currentTime >= timeRanges.start(index) && currentTime <= timeRanges.end(index)) {
                 currentTime = timeRanges.end(index);
-                minBufferTime = minBufferTime - currentTime;
-                be = be + (timeRanges.end(index) - timeRanges.start(index))
+                if (this.#currentRep?.isLastURL(currentTime)) {
+                    this.#sTask.add(() => { console.log("resolve"); resolve(false) });
+                    return promise
+                }
                 break
             }
         }
-        console.log("SourceBufferTask-sourceBufferUpdate", currentTime, minBufferTime, this.#mse.duration);
-        this.#sTask.add(this.#currentRep?.getSegmentRangeURLs(currentTime, minBufferTime))
-        return be >= this.#mse.duration ? false : true
+        this.#sTask.add(this.#currentRep?.getSegmentRangeURLs(currentTime, currentTime + minBufferTime))
+        resolve(true);
+        console.groupEnd();
+        return promise;
     }
     clearReps() {
         this.#currentRep = undefined
@@ -246,10 +289,10 @@ class SourceBufferTask {
     /**
      * 设置rep
      */
-    setRep(rep: RepresentationMPD) {
+    setRep(rep: RepresentationMPD, option: Parameters<Representation["setRep"]>[0]) {
         if (this.#currentRep === rep) return true;
         if (this.#repSet.has(rep) && rep.initializationURL) {
-            this.#sTask.changeType(`${rep.mimeType}; codecs="${rep.codecs}"`)
+            this.#sTask.changeType(`${rep.mimeType}; codecs="${rep.codecs}"`, option)
             this.#sTask.add(rep.initializationURL);
             this.#currentRep = rep;
             return true
@@ -269,23 +312,19 @@ class SourceBufferTaskCollection {
         this.#url = url
         this.#el = el;
     }
+
     sourceBufferUpdate(currentTime: number, minBufferTime: number) {
-        let isBufferUpdate = true
-       // if (this.#mse.readyState === "open") {
-            this.#map.values().forEach((s, i) => {
-                s.sourceBufferUpdate(currentTime, minBufferTime).then(u => {
-                    isBufferUpdate = u
-                    if (i === this.#map.size - 1 && !isBufferUpdate && this.#mse.readyState === "open") {
-
-                        this.#mse.endOfStream()
-                        console.log("sourceBufferUpdate--endOfStream", u, s, i, this.#map.size);
-
-                    }
-                    console.log("sourceBufferUpdate--u", u, s, i, this.#map.size);
-                })
-            })
-       // }
-
+        Promise.all(this.#map.values().map(s => s.sourceBufferUpdate(currentTime, minBufferTime))).then(e => {
+            if (e.every(ued => ued === false) && this.#mse.readyState === "open") {
+                console.log("endOfStream", this.#mse.duration, this.#el.currentTime);
+                if(Number.isInteger(this.#mse.duration)){
+                    this.#mse.endOfStream()
+                }else{
+                    this.#updateMpd()
+                }
+                
+            }
+        })
     }
     #updateMpd = async () => {
         const response = await fetch(this.#url)

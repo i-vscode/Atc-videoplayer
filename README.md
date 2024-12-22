@@ -15,29 +15,26 @@
 const url = "/dash3/output.mpd";
 /** 
  * 创建 daspPlayer 播放器类*
- * @param id string | HTMLVideoElement
+ * @param id string | HTMLMediaElement
  */
-const dp = new VideoDash("video2")
-/** 绑定的 video元素 */
-const videoElement = dp.el
+const player = new Player("video2") 
 /** 装载 mpd文件 ，
  * 如果需要装载不同的mpd， 比如下一集的mpd，只需重新调用这个即可 */
-dp.loaderAsync(url).then(b => {
-    /** 装载成功
-     *  通过 dp.videoSet/dp.audioSet获取码流列表， 
+player.loaderAsync(url).then(c => {
+    /** 装载成功 
      *  可根据需要设置或切换不同码流rep源
      */
-    dp.videoSet?.at(-1)?.switch()
-    dp.audioSet?.at(-1)?.switch()
+     c("video")?.at(0)?.setRep()
+     c("audio")?.at(0)?.setRep()
 })
 ```
- ## VideoDash类说明
+ ## Player类说明
 
  ```Html
  <video width="800" height="600" id="video2">
  ```
   ```Js
-  const dp = new VideoDash("video2")
+  const dp = new Player("video2")
 
 /** 装载 mpd文件 可多次调用，重新调用会替换旧mdp设置*/
 dp.loaderAsync();
@@ -45,6 +42,10 @@ dp.loaderAsync();
   ```
 
 ## [更新](/CHANGELOG.md)
+
+### 1.0.0-alpha.2
+
+修改Segment类 ，及流结束的判断和处理
 
 ### 1.0.0-alpha.1
 

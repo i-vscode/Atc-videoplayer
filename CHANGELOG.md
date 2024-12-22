@@ -1,6 +1,11 @@
 # Atc-videoplayer dash流播放器 变更日志
 
 
+
+### 1.0.0-alpha.2
+
+修改Segment类 ，及流结束的判断和处理
+
 ### 1.0.0-alpha.1
 
 **重构 播放器**

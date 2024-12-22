@@ -29,10 +29,11 @@ export class Player {
 				this.#processor?.sourceBufferUpdate(this.#el!.currentTime, this.#options.minBufferTime);
 			})
 			this.#el?.addEventListener("timeupdate", throttle(() => {
-				console.log("timeupdate	当目前的播放位置已更改时触发。");
+				//console.log("timeupdate	当目前的播放位置已更改时触发。",this.#el!.currentTime);
 				this.#processor?.sourceBufferUpdate(this.#el!.currentTime, this.#options.minBufferTime);
 			}, 2000)); 
 			this.#el.addEventListener("seeking", () => {  
+				console.log("seeking  当用户开始移动/跳跃到音频/视频中的新位置时触发。",this.#el!.currentTime);
 				this.#processor?.sourceBufferUpdate(this.#el!.currentTime, this.#options.minBufferTime);
 			});
 		}

@@ -6,10 +6,10 @@ export * from "./Player-Error.ts"
 export class PlayerOptions {
     /**最小缓冲时间 (秒) */
     minBufferTime: number = 15;
-    constructor(p?:Partial<PlayerOptions>){
-        Object.assign(this,p)
+    constructor(p?: Partial<PlayerOptions>) {
+        Object.assign(this, p)
     }
- 
+
 }
 
 /** 防抖 */
@@ -39,7 +39,7 @@ export interface Representation {
     /** id */
     get id(): string
     /** 开始时间 */
-    get start(): number 
+    get start(): number
     /** 编码 */
     get codecs(): string
     /** mimeType类型 */
@@ -51,9 +51,11 @@ export interface Representation {
     /**视频高度 */
     get height(): number
     /** 媒体比例 */
-    get sar(): string 
-    /** 设置当前rep适配描述 */
-    setRep(): boolean
+    get sar(): string
+    /** 设置当前rep适配描述 
+     * 
+    */
+    setRep(option?: { cacheSwitchMode: "radical"|"soft" | "disable" }): boolean
 }
 /** 视频比例  枚举*/
 export enum Sar {
@@ -75,12 +77,12 @@ export enum QualityTab {
 /**
  * 处理器抽象类
  */
-export abstract class Processor { 
+export abstract class Processor {
     /**
      * 更新源缓冲
      * @param timeupdate 当前播放时间 
      */
-    abstract sourceBufferUpdate(currentTime:number,minBufferTime:number): void
+    abstract sourceBufferUpdate(currentTime: number, minBufferTime: number): void
 
     /** 获取适配集描述列表 */
     abstract getRepList(repType: HintedString<"video" | "audio">): Array<Representation> | undefined
