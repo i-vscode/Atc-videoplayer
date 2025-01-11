@@ -1,15 +1,32 @@
 export * from "./Player-Error.ts"
-
 /**
  * 播放器 配置
  */
 export class PlayerOptions {
     /**最小缓冲时间 (秒) */
     minBufferTime: number = 15;
+    // asyncURLConverter = async (keys: string[]) => {
+    //     const urlMap = new Map<string, URL>()
+    //     console.log("ssssssssss-asyncURLConverter", this, keys);
+    //     if (Array.isArray(keys) && this.#loadResult instanceof URL) {
+    //         keys.forEach(key => {
+    //             //       console.log("ssssssssss",key,this.#loadResult);
+
+    //             const url = URL.parse(key, this.#loadResult as URL)
+    //             if (url) {
+    //                 urlMap.set(key, url)
+    //             }
+    //         })
+    //     }
+    //     return urlMap
+    // }
     constructor(p?: Partial<PlayerOptions>) {
         Object.assign(this, p)
-    }
+        // this.#loadResult = loadResult
+        //console.log("acc,",this);
 
+        Object.freeze(this)
+    }
 }
 
 /** 防抖 */
@@ -52,10 +69,8 @@ export interface Representation {
     get height(): number
     /** 媒体比例 */
     get sar(): string
-    /** 设置当前rep适配描述 
-     * 
-    */
-    setRep(option?: { cacheSwitchMode: "radical"|"soft" | "disable" }): boolean
+    /** 设置当前rep适配描述 */
+    setRep(option?: { cacheSwitchMode: "radical" | "soft" | "disable" }): void
 }
 /** 视频比例  枚举*/
 export enum Sar {
@@ -73,27 +88,4 @@ export enum QualityTab {
     P720 = "720P",
     P1080 = "1080P",
     P10804K = "1080P4K"
-}
-/**
- * 处理器抽象类
- */
-export abstract class Processor {
-    /**
-     * 更新源缓冲
-     * @param timeupdate 当前播放时间 
-     */
-    abstract sourceBufferUpdate(currentTime: number, minBufferTime: number): void
-
-    /** 获取适配集描述列表 */
-    abstract getRepList(repType: HintedString<"video" | "audio">): Array<Representation> | undefined
-}
-/** 处理器的类型对象*/
-export type ProcessorType = {
-    /** 处理器 名称 */
-    name: string,
-    /** 
-     * 异步方法 获取处理器实例
-     * @returns 返回 undefined 则表示此处理器不支持此类型参数 </p>
-     * */
-    asyncFunctionProcessorInstance: (result: unknown, el: HTMLMediaElement) => Promise<Processor | undefined>
 }

@@ -1,5 +1,5 @@
-import { PlayerOptions, Processor } from "../Player-Options"
-import type { ProcessorType } from "../Player-Options"
+import { PlayerOptions, Processor } from "../Player"
+import type { ProcessorType } from "../Player"
 
 /**
  * MP4 处理器 

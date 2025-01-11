@@ -1,6 +1,10 @@
 # Atc-videoplayer dash流播放器 变更日志
 
 
+### 1.0.0-alpha.3
+
+MPDMSE增加一个MPDConverter类，适用于载入并mpd文件自定义ObjectStorage的查询请求和地址转换
+
 
 ### 1.0.0-alpha.2
 

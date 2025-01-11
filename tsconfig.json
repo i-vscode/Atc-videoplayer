@@ -1,5 +1,5 @@
 {
-  "compilerOptions": {
+  "compilerOptions": {"noImplicitThis": true,
     "allowJs": true,
     "target": "ESNext",
     "useDefineForClassFields": true,
@@ -20,7 +20,11 @@
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    "paths": { 
+      //"atc.ink.spa*": ["./lib/"],   
+      "@lib": ["./lib/"]
+    }
   },
   "include": [
     "src","src/*.d.ts","lib/*.ts","lib/*.d.ts","lib/**/*.ts","lib/**/*.d.ts"

@@ -43,6 +43,11 @@ dp.loaderAsync();
 
 ## [更新](/CHANGELOG.md)
 
+
+### 1.0.0-alpha.3
+
+MPDMSE增加一个MPDConverter类，适用于载入并mpd文件自定义ObjectStorage的查询请求和地址转换
+
 ### 1.0.0-alpha.2
 
 修改Segment类 ，及流结束的判断和处理

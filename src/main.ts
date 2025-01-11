@@ -1,23 +1,57 @@
 import './style.css'
-import { Player, PlayerOptions } from "../lib/Player"; 
-
-const pl = new Player("video2",new PlayerOptions({minBufferTime:120})) 
+import { MPDConverter, Player, PlayerOptions } from "../lib/Player";  
+const convertedResultMap = new Map<string, URL>()
+const pl = new Player("video2") 
 const url = new URL(window.location.href + "/dash2/output.mpd?fwe")
-//const url = new URL(window.location.href + "/dash/output.mpd?fwe")
-//const url ="/outputh65.mp4" 
-pl.loaderAsync(url).then(c => {
+const urlavs = new URL(window.location.href + "/dash2/output.mpd?fwe")
+const bs = document.getElementById("bs")   
+const avsConverter = async(keys:string[])=>{ 
+            const urlMap = new Map<string,URL>()   
+            if(Array.isArray(keys)){
+                const fetchURL = new URL(urlavs)             
+                fetchURL.searchParams.set("returnMode","entries")
+                console.log("fetcurl",fetchURL);  
+                keys.forEach(k=>{ 
+                    if(convertedResultMap.has(k)){
+                        urlMap.set(k,convertedResultMap.get(k)!)
+                    }else{
+                        fetchURL.searchParams.append("file",  k)
+                    }                       
+                })
+                if(fetchURL.searchParams.has("file")){                  
+                    await  fetch(fetchURL).then(async r=>{
+                        if(r.ok){                            
+                            const reMap= new Map<string,string>(await r.json()); 
+                            reMap.forEach((v,keys)=>{
+                                urlMap.set(keys,new URL(v));
+                                convertedResultMap.set(keys,new URL(v));
+                             }) 
+                    }})
+                }
+            }
+            return  urlMap
+} 
+pl.loaderAsync<MPDConverter>({mpd:url},{minBufferTime:120}).then(c=>{
     console.log("200 ok", c("video"));
-    c("video")?.at(0)?.setRep()
-    c("audio")?.at(0)?.setRep()
-    setTimeout(() => {
-     //   c("video")?.at(1)?.setRep({cacheSwitchMode:"soft"})
-    }, 12000);
-
-}).catch(c => {    
-    console.log("404 error 无法处理这个资源");
-    throw c
-}) 
-
+         c("video")?.at(0)?.setRep()
+         //c("audio")?.at(0)?.setRep()
+         const au= c("audio")?.at(0)
+         au?.setRep()
+         
+    if(bs){
+        c("video")?.forEach(v=>{
+            const bu = document.createElement("button")
+            bu.onclick = ()=>{
+                v.setRep({cacheSwitchMode:"soft"})
+                au?.setRep()            }
+            bu.innerText = `id:${v.id} b:${v.bandwidth} `
+            bs.appendChild(bu)
+          //  bs.innerHTML +=  `<div><button>${v.id }</button></div>`
+    
+        })
+    }
+})
+ 
 
 // setTimeout(() => {
 //     console.group("--------------------------------");
@@ -34,6 +68,7 @@ pl.loaderAsync(url).then(c => {
 //console.log(pl.getProcessors()); 
 
  
+ 
 
 // pl.el?.addEventListener("abort", () => { console.log("abort 当音频/视频的加载已放弃时触发。") })
 // pl.el?.addEventListener("canplay", () => { console.log("canplay	当浏览器可以开始播放音频/视频时触发。") })
@@ -42,8 +77,8 @@ pl.loaderAsync(url).then(c => {
 // pl.el?.addEventListener("emptied", () => { console.log("emptied  当目前的播放列表为空时触发。") })
 // pl.el?.addEventListener("ended", (e) => { console.log("ended  当目前的播放列表已结束时触发。") })
 // pl.el?.addEventListener("error", (e) => { console.log("error  当在音频/视频加载期间发生错误时触发。", e, (e.target as HTMLVideoElement).error?.message)})
-// pl.el?.addEventListener("loadeddata", () => { console.log("loadeddata  当浏览器已加载音频/视频的当前帧时触发。") })
-// pl.el?.addEventListener("loadedmetadata", () => {console.log("loadedmetadata	当浏览器已加载音频/视频的元数据时触发。");})
+// pl.el?.addEventListener("loadeddata", () => { console.log("%c loadeddata  当浏览器已加载音频/视频的当前帧时触发。") })
+// pl.el?.addEventListener("loadedmetadata", () => {console.log("%cloadedmetadata	当浏览器已加载音频/视频的元数据时触发。","color:red;");})
 // pl.el?.addEventListener("loadstart", () => { console.log("loadstart  当浏览器开始查找音频/视频时触发。") })
 // pl.el?.addEventListener("play", () => { console.log("play  当音频/视频已开始或不再暂停时触发。") })
 // pl.el?.addEventListener("pause", () => { console.log("pause  当音频/视频已暂停时触发。") })
