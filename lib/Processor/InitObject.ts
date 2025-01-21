@@ -1,9 +1,9 @@
-import { PlayerOptions, Processor } from "../Player"
-import type { ProcessorType, Representation } from "../Player"
+import { PlayerError, PlayerOptions, Processor } from "@lib"
+import type { ProcessorType, Representation, RepType, SwitchRepOptions } from "@lib"
 const extensionM3U8 = /\.M3U8(?=[?#])|\.M3U8$/gi;
 
 
- 
+
 /** 自定义分段对象 */
 export class InitConverter {
     init: {
@@ -20,11 +20,11 @@ export class InitConverter {
         }
         throw new PlayerError(2, "MPDConverter : mpd or converter is undefined")
     }
-    static canParse(p: URL | MPDString | MPDConverterType | Object) {
+    static canParse(p: URL | Object) {
         return false
     }
     /** 解析 Object To MPDConverter对象  */
-    static parse(p: URL | MPDString | Object) {
+    static parse(p: URL | Object) {
         return undefined
     }
 }
@@ -34,18 +34,17 @@ export class InitConverter {
 /**
  * InitObject 解析器
  */
-class InitObject extends Processor {
+class InitObject implements Processor {
 
 
     constructor(addr: URL | Object, options: PlayerOptions) {
-        super()
+
         console.log("M3U8", this);
     }
-    getRepList(repType: Parameters<Processor["getRepList"]>[0]) {
-        return undefined
+    get(repType: RepType): Array<Representation> {
+        throw new Error("Method not implemented.");
     }
-
-    get src(): string {
+    switch(repType: RepType, rep: Representation, options: SwitchRepOptions): void {
         throw new Error("Method not implemented.");
     }
     sourceBufferUpdate(currentTime: Number): void {
@@ -54,7 +53,7 @@ class InitObject extends Processor {
 }
 const processor: ProcessorType = {
     name: "M3U8",
-    asyncFunctionProcessorInstance: async (r: unknown, el: HTMLMediaElement,options: PlayerOptions) => {
+    asyncFunctionProcessorInstance: async (r: unknown, el: HTMLMediaElement, options: PlayerOptions) => {
         return r instanceof Response && r.ok && extensionM3U8.test(r.url) ?
             new InitObject(r, options) : undefined
     }

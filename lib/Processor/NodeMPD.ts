@@ -1,4 +1,4 @@
-import { PlayerOptions, Processor } from "../Player-Options";
+import { PlayerOptions, Representation, RepType, SwitchRepOptions, type Processor } from "@lib";
 
 /**
  * 文档节点型 MPD解析器
@@ -16,6 +16,12 @@ export class NodeMPD implements Processor {
         this.#audioSourceBuffer = this.#mse.addSourceBuffer(`video/mp4; codecs="mp4a.40.2"`)
         this.#src = URL.createObjectURL(this.#mse);
         console.log("NodeMPD", this);
+    }
+    get(repType: (string & {}) | "video" | "audio"): Array<Representation> {
+        throw new Error("Method not implemented.");
+    }
+    switch(repType: RepType, rep: Representation, options: SwitchRepOptions): void {
+        throw new Error("Method not implemented.")
     }
     #src: string
     get src(): string {

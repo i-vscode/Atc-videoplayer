@@ -10,6 +10,11 @@
 > 暂无UI
  
 ## 简单使用方法
+
+ ```Html
+ <video width="800" height="600" id="video2">
+ ```
+
  ```js 
 /** mpd文件地址 */
 const url = "/dash3/output.mpd";
@@ -27,21 +32,17 @@ player.loaderAsync(url).then(c => {
      c("video")?.at(0)?.setRep()
      c("audio")?.at(0)?.setRep()
 })
-```
- ## Player类说明
-
- ```Html
- <video width="800" height="600" id="video2">
- ```
-  ```Js
-  const dp = new Player("video2")
-
-/** 装载 mpd文件 可多次调用，重新调用会替换旧mdp设置*/
-dp.loaderAsync();
-
-  ```
-
+``` 
 ## [更新](/CHANGELOG.md)
+
+
+### 1.1.0-alpha.1 
+
+增加Player-Processor，Player-Representation，Player-Tools，Player-Event类型定义和相关方法
+
+修改 Player中的方法名和处理逻辑
+
+MPDMSE 处理器增加FetchSchedule调度类
 
 
 ### 1.0.0-alpha.3

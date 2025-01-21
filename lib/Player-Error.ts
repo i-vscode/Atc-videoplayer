@@ -1,8 +1,4 @@
 
-import { type HintedString } from "./Player-Options";
-
-//export type HintedString<KnownValues extends string> = (string & {}) | KnownValues;
-type HintedStringCode = HintedString<"0 url错误" | "1">
 
 /**
  *   播放器 错误类

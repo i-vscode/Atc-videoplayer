@@ -5,6 +5,31 @@ const pl = new Player("video2")
 const url = new URL(window.location.href + "/dash2/output.mpd?fwe")
 const urlavs = new URL(window.location.href + "/dash2/output.mpd?fwe")
 const bs = document.getElementById("bs")   
+pl.el?.addEventListener("error", (e) => { console.log("error  当在音频/视频加载期间发生错误时触发。", e, (e.target as HTMLVideoElement).error?.message)})
+pl.on("loadedmetadata",(e)=>{
+console.log("loadedmetadata--event",e);
+
+})
+pl.loaderAsync<MPDConverter>({mpd:url},{minBufferTime:120}).then(c=>{
+    console.log("200 ok", c("video"));
+         c("video")?.at(0)?.switch()
+         //c("audio")?.at(0)?.setRep()
+         const au= c("audio")?.at(0)
+         au?.switch()
+        
+    if(bs){
+        c("video")?.forEach(v=>{
+            const bu = document.createElement("button")
+            bu.onclick = ()=>{
+                v.switch({switchMode:"soft"})
+                au?.switch()            }
+            bu.innerText = `id:${v.id} b:${v.bandwidth} `
+            bs.appendChild(bu)
+          //  bs.innerHTML +=  `<div><button>${v.id }</button></div>`
+    
+        })
+    }
+})
 const avsConverter = async(keys:string[])=>{ 
             const urlMap = new Map<string,URL>()   
             if(Array.isArray(keys)){
@@ -31,26 +56,7 @@ const avsConverter = async(keys:string[])=>{
             }
             return  urlMap
 } 
-pl.loaderAsync<MPDConverter>({mpd:url},{minBufferTime:120}).then(c=>{
-    console.log("200 ok", c("video"));
-         c("video")?.at(0)?.setRep()
-         //c("audio")?.at(0)?.setRep()
-         const au= c("audio")?.at(0)
-         au?.setRep()
-         
-    if(bs){
-        c("video")?.forEach(v=>{
-            const bu = document.createElement("button")
-            bu.onclick = ()=>{
-                v.setRep({cacheSwitchMode:"soft"})
-                au?.setRep()            }
-            bu.innerText = `id:${v.id} b:${v.bandwidth} `
-            bs.appendChild(bu)
-          //  bs.innerHTML +=  `<div><button>${v.id }</button></div>`
-    
-        })
-    }
-})
+
  
 
 // setTimeout(() => {
@@ -76,7 +82,7 @@ pl.loaderAsync<MPDConverter>({mpd:url},{minBufferTime:120}).then(c=>{
 // pl.el?.addEventListener("durationchange", () => { console.log("durationchange  当音频/视频的时长已更改时触发。",pl.el?.duration) })
 // pl.el?.addEventListener("emptied", () => { console.log("emptied  当目前的播放列表为空时触发。") })
 // pl.el?.addEventListener("ended", (e) => { console.log("ended  当目前的播放列表已结束时触发。") })
-// pl.el?.addEventListener("error", (e) => { console.log("error  当在音频/视频加载期间发生错误时触发。", e, (e.target as HTMLVideoElement).error?.message)})
+//pl.el?.addEventListener("error", (e) => { console.log("error  当在音频/视频加载期间发生错误时触发。", e, (e.target as HTMLVideoElement).error?.message)})
 // pl.el?.addEventListener("loadeddata", () => { console.log("%c loadeddata  当浏览器已加载音频/视频的当前帧时触发。") })
 // pl.el?.addEventListener("loadedmetadata", () => {console.log("%cloadedmetadata	当浏览器已加载音频/视频的元数据时触发。","color:red;");})
 // pl.el?.addEventListener("loadstart", () => { console.log("loadstart  当浏览器开始查找音频/视频时触发。") })

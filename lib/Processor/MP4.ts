@@ -1,15 +1,20 @@
 import { PlayerOptions, Processor } from "../Player"
-import type { ProcessorType } from "../Player"
+import type { ProcessorType, Representation, RepType, SwitchRepOptions } from "@lib"
 
 /**
  * MP4 处理器 
  */
-class MP4 extends Processor {                     
-    constructor(addr: string, el: HTMLMediaElement) {
-        super() 
+class MP4 implements Processor {                     
+    constructor(addr: string, el: HTMLMediaElement) { 
         el.src = addr
     }
-    getRepList(_repType: Parameters<Processor["getRepList"]>[0]) {
+    get(repType: RepType): Array<Representation> {
+        throw new Error("Method not implemented.")
+    }
+    switch(repType: RepType, rep: Representation, options: SwitchRepOptions): void {
+        throw new Error("Method not implemented.")
+    }
+    getRepList(_repType: RepType) {
         return undefined
     } 
     sourceBufferUpdate(_currentTime: Number): void {}

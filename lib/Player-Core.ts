@@ -1,38 +1,28 @@
-import type { HintedString, Representation } from "./Player-Options";
-import { PlayerOptions, throttle, PlayerError } from "./Player-Options";
 
-/** URLString */
-export type URLString = `${"http" | "https"}://${string & { length: 1 }}`;
-/** NotBasicOrLiteral */
-export type NotBasicOrLiteral<T> = T extends string | number | boolean | bigint | symbol | undefined | null ? T extends T ? never : T : T;
-/**
- *播放器 处理器抽象类
- */
-export abstract class Processor {
-    /**
-     * 更新源缓冲
-     * @param timeupdate 当前播放时间 
-     */
-    abstract sourceBufferUpdate(currentTime: number): void
-
-    /** 获取适配集描述列表 */
-    abstract getRepList(repType: HintedString<"video" | "audio">): Array<Representation> | undefined
-}
+import { PlayerOptions } from "./Player-Options";
+import { throttle } from "./Player-Tools";
+import { PlayerEventEmitter, type ValidEvents, type Listener } from "./Player-Event";
+import { Representation } from "./Player-Representation";
+import { PlayerError } from "./Player-Error";
+import type { Processor, ProcessorType, RepType } from "./Player-Processor";
+import { isProcessor, SwitchRepOptions } from "./Player-Processor";
 
 
-/**播放器 处理器的类型对象*/
-export type ProcessorType = {
-    /** 处理器 名称 */
-    name: unknown
-    /** 
-     * 异步方法 获取处理器实例
-     * @returns 返回 undefined 则表示此处理器不支持此类型参数 </p>
-     * */
-    asyncFunctionProcessorInstance: (result: unknown, el: HTMLMediaElement, options: PlayerOptions) => Promise<Processor | undefined>
+/** 一个空的 处理器 为了避免 PlayerCore.processor为空 */
+const NullProcessor = new class implements Processor {
+    constructor() { }
+    get(): Array<Representation> { return [] }
+    switch(): void { }
+    get src(){return ""}
+    sourceBufferUpdate(): void { }
 }
 
 const processorList = new Map<ProcessorType["name"], ProcessorType["asyncFunctionProcessorInstance"]>()
 
+const getRepList = (repType: RepType, processor?: Processor) =>
+      processor?.get(repType).map(rep => ({ ...rep, switch(options: SwitchRepOptions = { switchMode: "soft" }) { 
+        processor.switch(repType, rep, options)    
+    } })) || []
 
 /**
  * 播放器 核心
@@ -43,9 +33,10 @@ const processorList = new Map<ProcessorType["name"], ProcessorType["asyncFunctio
  */
 export class PlayerCore {
     #options: PlayerOptions
-    #el: HTMLMediaElement | null
+    #el: HTMLMediaElement
+    #processor: Processor = NullProcessor;
+    #eventEmitter: PlayerEventEmitter = new PlayerEventEmitter()
     get el() { return this.#el }
-    #processor?: Processor;
     constructor(el: HTMLMediaElement | string, options?: Partial<PlayerOptions>) {
         this.#options = new PlayerOptions(options ?? { minBufferTime: 13 })
         this.#el = typeof el === "string" ? document.getElementById(el) as HTMLMediaElement : el;
@@ -60,22 +51,32 @@ export class PlayerCore {
                 this.#processor?.sourceBufferUpdate(this.#el!.currentTime);
             });
         }
-
     }
+    /** 添加事件 */
+    on<T extends ValidEvents>(event: T, listener: Listener<T>) {
+        this.#eventEmitter.on(event, listener)
+    }
+    /** 移除事件 */
+    off<T extends ValidEvents>(event: T, listener: Listener<T>) {
+        this.#eventEmitter.off(event, listener)
+    }
+    /** 添加一次性事件 */
+    once<T extends ValidEvents>(event: T, listener: Listener<T>) {
+        this.#eventEmitter.once(event, listener)
+    }
+
     /** 装载 MPD文件 | 分段MP4文件 异步*/
-    async loaderAsync<T>(result: T extends URLString | URL ? URLString | URL : NotBasicOrLiteral<T>, options?: PlayerOptions) { 
-        if (this.#el instanceof HTMLMediaElement) {
+    async loaderAsync<T>(result: T extends URLString | URL ? URLString | URL : NotBasicOrLiteral<T>, options?: Partial<PlayerOptions>) {
+        if (result && this.#el instanceof HTMLMediaElement) {
             const playOptions = new PlayerOptions(Object.assign(Object.assign({}, this.#options), options))
-            if (result) {
-                const response = await Promise.resolve(
-                    (result instanceof URL || typeof result=== "string") && URL.canParse(result)? fetch(result, { method: "HEAD" }) : result
-                )
-                if (response instanceof Response && response.ok || typeof response === "object") {
-                    for (const processor of processorList) {
-                        this.#processor = await Promise.resolve(processor[1](response, this.#el, playOptions))
-                        if (this.#processor instanceof Processor) {
-                            return this.#processor.getRepList.bind(this.#processor)
-                        }
+            const response = await Promise.resolve(
+                (result instanceof URL || typeof result === "string") && URL.canParse(result) ? fetch(result, { method: "HEAD" }) : result
+            )
+            if (response instanceof Response && response.ok || typeof response === "object") {
+                for await (const processor of processorList.values().map(p => p(response, this.#el, playOptions, this.#eventEmitter))) {
+                    if (isProcessor(processor)) {
+                        this.#processor = processor                         
+                        return (repType: RepType) => getRepList(repType, this.#processor)
                     }
                 }
             }
@@ -84,15 +85,15 @@ export class PlayerCore {
         throw new PlayerError(1, "el 为空或者不为HTMLMediaElement类型", this.#el)
     }
 
-    /** 添加处理器  */
-    set(processorType: ProcessorType) { PlayerCore.set(processorType) }
+    get(repType: RepType) { return getRepList(repType, this.#processor) }
+
+    /** 处理器 遍历器 */
+    static processorEntries() { return processorList.entries() }
 
     /** 添加处理器  静态方法*/
-    static set(processorType: ProcessorType) {
+    static setProcessor(processorType: ProcessorType) {
         if (typeof processorType.name === "string" && typeof processorType.asyncFunctionProcessorInstance === "function") {
             processorList.set(processorType.name, processorType.asyncFunctionProcessorInstance)
         }
     }
-    /** 返回键值对的遍历器 */
-    entries() { return processorList?.entries() }
 } 

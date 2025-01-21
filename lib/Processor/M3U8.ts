@@ -1,17 +1,22 @@
-import { PlayerOptions, Processor } from "../Player"
-import type { ProcessorType, Representation } from "../Player"
+import { PlayerOptions, Processor } from "@lib"
+import type { ProcessorType, Representation, RepType, SwitchRepOptions } from "@lib"
 const extensionM3U8 = /\.M3U8(?=[?#])|\.M3U8$/gi;
 /**
  * M3U8 hlc解析器
  */
-class M3U8 extends Processor {
+class M3U8 implements Processor {
 
 
-    constructor(addr: URL | Object, options: PlayerOptions) {
-        super()
+    constructor(addr: URL | Object, options: PlayerOptions) { 
         console.log("M3U8", this);
     }
-    getRepList(repType: Parameters<Processor["getRepList"]>[0]) {
+    get(repType: RepType): Array<Representation> {
+        throw new Error("Method not implemented.");
+    }
+    switch(repType: RepType, rep: Representation, options: SwitchRepOptions): void {
+        throw new Error("Method not implemented.");
+    }
+    getRepList(repType: RepType) {
         return undefined
     }
 

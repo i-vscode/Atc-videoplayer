@@ -1,5 +1,13 @@
 # Atc-videoplayer dash流播放器 变更日志
 
+### 1.1.0-alpha.1 
+
+增加Player-Processor，Player-Representation，Player-Tools，Player-Event类型定义和相关方法
+
+修改 Player中的方法名和处理逻辑
+
+MPDMSE 处理器增加FetchSchedule调度类
+
 
 ### 1.0.0-alpha.3
 
