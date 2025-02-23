@@ -9,7 +9,10 @@ type EventTypes = {
 export type ValidEvents = (string & {}) | keyof EventTypes;
 export type ListenerParameters<T> = T extends keyof EventTypes ? EventTypes[T] : unknown
 export type Listener<T> = (e: ListenerParameters<T>) => void;
-export class PlayerEventEmitter {
+/** 播放器事件发射器 */
+export type PlayerEventEmitter = <T extends ValidEvents>(event: T, e: ListenerParameters<T>)=>void
+/** 播放器事件 */
+export class PlayerEvent {
     private events: Map<string, Set<Listener<any>>>;
     constructor() {
         this.events = new Map();
@@ -32,8 +35,7 @@ export class PlayerEventEmitter {
         if (listeners) {
             listeners.delete(listener);
         }
-    }
-
+    } 
     /** 触发事件 */
     emit<T extends ValidEvents>(event: T, e: ListenerParameters<T>): void {
         const listeners = this.events.get(event);

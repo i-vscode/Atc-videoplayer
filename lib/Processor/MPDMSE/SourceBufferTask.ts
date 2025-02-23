@@ -1,6 +1,6 @@
 
 import { isRepresentation, Representation, Sar, SwitchRepOptions } from "@lib";
-import { FetchSchedule, CreateFetchSchedule } from "./FetchSchedule";
+import type { FetchSchedule, FetchScheduleFactoryMethod } from "./FetchSchedule";
 import { Segment } from "./Segment";
 const rep: Representation = {
     id: "",
@@ -13,6 +13,7 @@ const rep: Representation = {
     height: 0,
     sar: Sar.Unknown
 }
+const nullSegment = new Segment(rep)
 /** 源缓存任务类 */
 export class SourceBufferTask {
     #map = new Map<Representation, Segment>()
@@ -21,41 +22,27 @@ export class SourceBufferTask {
     #sourceBuffer: SourceBuffer
     #current = rep
     #fetch: FetchSchedule
-    constructor(mse: MediaSource, createFetchSchedule: CreateFetchSchedule) {
+    constructor(mse: MediaSource, fetchScheduleFactoryMethod: FetchScheduleFactoryMethod) {
         this.#mse = mse;
-        this.#fetch = createFetchSchedule((startTime, endTime) => this.#map.get(this.#current)?.getSegmentFiles(startTime, endTime) ?? [])
+        this.#fetch = fetchScheduleFactoryMethod(() => {
+            return this.#map.get(this.#current) ?? nullSegment
+        })
         this.#sourceBuffer = mse.addSourceBuffer(`video/mp4; codecs="avc1.64001f"`)
         this.#sourceBuffer.addEventListener("updateend", () => { this.run() })
-        this.#mse.addEventListener("sourceclose", () => {
-            this.clear()
-        })
     }
     /** 源缓存更新 */
-    sourceBufferUpdate(currentTime: number, bufferTime: number) {
+    sourceBufferUpdate(currentTime: number) {
         const timeRanges = this.#sourceBuffer.buffered;
-        let startTime = currentTime
-       
+        let  bufferedTime = currentTime;
         for (let index = 0; index < timeRanges.length; index++) {
-            if (startTime >= timeRanges.start(index) && startTime <= timeRanges.end(index)) {
-                startTime = timeRanges.end(index);
+            if (bufferedTime >= timeRanges.start(index) && bufferedTime <= timeRanges.end(index)) {
+                bufferedTime = timeRanges.end(index);
                 break
             }
         } 
-        
-        
-        if (this.isLastFile(startTime) === false) {
-   //         console.log("SourceBufferTask--sourceBufferUpdate",currentTime,startTime,bufferTime);
+        this.#fetch(currentTime, bufferedTime).then(async responses =>this.run(responses));
+        return this;
 
-            return this.#fetch(startTime, bufferTime).then(async all => {
-                for (const response of all) {
-                    if (response && response.ok) {
-                        this.run(await response.arrayBuffer())
-                    }
-                }
-                return this
-            })
-        }
-        return this
     }
     isLastFile(currentTime: number) {
         return this.#map.get(this.#current)?.isLastFile(currentTime) ?? true
@@ -72,45 +59,43 @@ export class SourceBufferTask {
         }
         return this
     }
-    run(results?: Array<ArrayBuffer | (() => void)> | ArrayBuffer | (() => void)) {
+    run(results?: Array<Response | ArrayBuffer | (() => void)> | Response | ArrayBuffer | (() => void)) {       
+        
         if (results && this.#mse.readyState === "open") {
-            results = Array.isArray(results) ? results : [results]
+            results = Array.isArray(results) ? results : [results]            
             results.forEach(result => {
                 if (typeof result === "function") {
                     this.#tasks.push(result)
+                } else if (result instanceof Response && result.ok) {
+                    result.arrayBuffer().then(a => {
+                        this.run(() => this.#sourceBuffer.appendBuffer(a)) 
+                    })
                 } else if (result instanceof ArrayBuffer) {
                     this.#tasks.push(() => this.#sourceBuffer.appendBuffer(result))
                 }
             })
         }
-        if (this.#sourceBuffer.updating === false) {
+        if (this.#sourceBuffer.updating === false) { 
             this.#tasks.shift()?.();
         }
         return this
-    }
-    /** 当前  Representation*/
-    get current() { return this.#current }
+    } 
 
     /**切换 Representation  */
-    switch(rep: Representation, options: SwitchRepOptions) {
-        if (this.#map.has(rep) && this.#map.get(rep)?.initialization) {
-            this.#fetch(this.#map.get(rep)!.initialization!).then(async response => {
-                this.#sourceBuffer.changeType(`${rep.mimeType}; codecs="${rep.codecs}"`)
-                this.#current = rep
-                if (response && response.ok && options?.switchMode) {
-                    switch (options?.switchMode) {
-                        case "radical":
-                            this.clear().run([() => { this.#sourceBuffer.abort() }, await response.arrayBuffer()])
-                            break;
-                        case "soft":
-                            this.run([() => { this.#sourceBuffer.remove(0, Infinity) }, await response.arrayBuffer()])
-                            break
-                        case "disable":
-                        default:
-                            break;
-                    }
-                }
-            }) 
+    switch(rep: Representation, currentTime: number, options: SwitchRepOptions) {
+        if (this.#map.has(rep) && this.#current !== rep) { 
+            this.#current = rep
+            this.#fetch(currentTime, "initialization").then(async responses => {
+               this.run(() => this.#sourceBuffer.changeType(`${rep.mimeType}; codecs="${rep.codecs}"`))
+                switch (options?.switchMode) {
+                    case "radical":
+                       this.run([() => this.#sourceBuffer.abort(), () => this.#sourceBuffer.remove(0, Infinity)])
+                        break;
+                    case "soft": 
+                        break
+                } 
+                this.run(responses)
+            })
         }
         return this;
     }

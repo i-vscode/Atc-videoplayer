@@ -1,11 +1,11 @@
 
-/** PT时间段转换为秒 */
-export const PTdurationToSeconds = (() => {
+/** 解析 PT时间字符串段转换为秒 */
+export const parsePTdurationToSeconds = (() => {
     /** PT时间类正则 */
     const reptms = /^PT(?:(\d+\.*\d*)H)?(?:(\d+\.*\d*)M)?(?:(\d+\.*\d*)S)?$/;
-    return (PT?: unknown) => {
-        let hours = 0, minutes = 0, seconds = 0
+    return (PT?: unknown, defaultValue = NaN) => {
         if (typeof PT === "string") {
+            let hours = 0, minutes = 0, seconds = 0
             if (reptms.test(PT)) {
                 var matches = reptms.exec(PT);
                 if (matches?.[1]) hours = Number(matches[1]);
@@ -14,7 +14,7 @@ export const PTdurationToSeconds = (() => {
                 return Number((hours * 3600 + minutes * 60 + seconds).toFixed(2));
             }
         }
-        return typeof PT === "number" && isFinite(PT) && PT > 0 ? PT : NaN
+        return typeof defaultValue === "number" ? defaultValue : NaN
     }
 })()
 

@@ -3,8 +3,8 @@
 export type Representation = {
     /** id */
     readonly id: string
-    /** 此片段在整个媒体的开始时间 */
-    readonly startTime: number
+    /** 此片段在整个媒体的开始时间 */    
+    readonly startTime: number 
     /** 此片段的持续时间 */
     readonly duration: number
     /** 编码 */

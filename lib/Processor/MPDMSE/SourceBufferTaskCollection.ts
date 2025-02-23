@@ -1,22 +1,19 @@
 import { PlayerEventEmitter, PlayerOptions } from "@lib";
 import type { SwitchRepOptions, Representation, RepType } from "@lib";
-import { Converter } from "./Converter";
-import { PTdurationToSeconds } from "./Tools";
+import { MPDDefaultConverter } from "./Converter";
+import { parsePTdurationToSeconds } from "./Tools";
 import { SourceBufferTask } from "./SourceBufferTask";
-import { CreateFetchSchedule, createFetchScheduleControlCenter } from "./FetchSchedule";
+import { type FetchScheduleFactoryMethod, createFetchScheduleFactoryMethod } from "./FetchSchedule";
 import { parseRepresentationElement } from "./Representation";
 
 /** 更新 SourceBufferTasks */
 const updateSourceBufferTasks = (mpdElement: Element, taskCollection: SourceBufferTaskCollection): void => {
-    taskCollection.duration = PTdurationToSeconds(mpdElement.getAttribute("mediaPresentationDuration"));
+    taskCollection.duration = parsePTdurationToSeconds(mpdElement.getAttribute("mediaPresentationDuration"),Infinity);
     taskCollection.clear();
     for (const adaptationSetElement of mpdElement.getElementsByTagName("AdaptationSet")) {
         const contentType = adaptationSetElement.getAttribute("contentType");
-
-
         if (contentType) {
             const sourceBufferTask = taskCollection.getORset(contentType)
-
             for (const repElement of adaptationSetElement.getElementsByTagName("Representation")) {
                 sourceBufferTask.set(
                     parseRepresentationElement(repElement, taskCollection.duration, adaptationSetElement.getElementsByTagName("SegmentList")?.[0])
@@ -29,19 +26,19 @@ const updateSourceBufferTasks = (mpdElement: Element, taskCollection: SourceBuff
 
 /** 源缓存任务映射集合 */
 export class SourceBufferTaskCollection {
-    #options: PlayerOptions
+   // #options: PlayerOptions
     #map = new Map<RepType, SourceBufferTask>();
     #mse = new MediaSource();
-    #mpdConverter: Converter;
-    #createFetchSchedule: CreateFetchSchedule;
+    #mpdConverter: MPDDefaultConverter;
+    #fetchScheduleFactoryMethod: FetchScheduleFactoryMethod;
     #eventEmitter: PlayerEventEmitter
     #el: HTMLMediaElement;
-    constructor(mpdConverter: Converter, el: HTMLMediaElement, options: PlayerOptions, eventEmitter: PlayerEventEmitter) {
+    constructor(mpdConverter: MPDDefaultConverter, el: HTMLMediaElement, options: PlayerOptions, eventEmitter: PlayerEventEmitter) {
         this.#mpdConverter = mpdConverter
         this.#el = el;
-        this.#options = options
+       // this.#options = options
         this.#eventEmitter = eventEmitter
-        this.#createFetchSchedule = createFetchScheduleControlCenter(mpdConverter)
+        this.#fetchScheduleFactoryMethod = createFetchScheduleFactoryMethod(mpdConverter,options)
 
     }
     get duration() { return this.#mse.duration }
@@ -49,7 +46,7 @@ export class SourceBufferTaskCollection {
     sourceBufferUpdate(currentTime: number) {
         if (this.#mse.readyState === "open") {
         //    console.log("SourceBufferTaskCollection -sourceBufferUpdate",currentTime);
-            Promise.all(this.#map.values().map(s => s.sourceBufferUpdate(currentTime, this.#options.minBufferTime))).then(sourceBufferTasks => {
+            Promise.all(this.#map.values().map(s => s.sourceBufferUpdate(currentTime))).then(sourceBufferTasks => {
                 if (sourceBufferTasks.every(sourceBufferTask => sourceBufferTask.isLastFile(currentTime))) {
                     if (Number.isInteger(this.#mse.duration)) {
                         if (this.#mse.readyState === "open") { this.#mse.endOfStream() }
@@ -75,21 +72,20 @@ export class SourceBufferTaskCollection {
     getORset(repType: RepType) {
         return this.#map.has(repType) ?
             this.#map.get(repType)!
-            : this.#map.set(repType, new SourceBufferTask(this.#mse, this.#createFetchSchedule)).get(repType)!
+            : this.#map.set(repType, new SourceBufferTask(this.#mse, this.#fetchScheduleFactoryMethod)).get(repType)!
     }
-    changeType(repType: RepType, rep: Representation, options: SwitchRepOptions) {
-        this.#map.get(repType)?.switch(rep, options)
+    changeType(repType: RepType, rep: Representation,  currentTime:number,options: SwitchRepOptions) {
+        this.#map.get(repType)?.switch(rep,currentTime, options)
     }
-    sourceopen(res?: Response) {
-        const { promise, resolve } = Promise.withResolvers<typeof this>()
-        this.#mse.addEventListener("sourceopen", (f) => {
-            this.#mpdConverter.asyncResponse().then(async response => {
+    asyncSourceopen(res?: Response) {
+        const { promise, resolve } = Promise.withResolvers<typeof this>()      
+        this.#mse.addEventListener("sourceopen",async () => {    
+            const response = res instanceof Response ? res : (await  this.#mpdConverter.asyncResponse())
                 if (response && response.ok) {
                     const mpdElement = new DOMParser().parseFromString(await response.text(), "text/xml").documentElement;
                     updateSourceBufferTasks(mpdElement, this)
                 }
                 resolve(this)
-            })
         }, { once: true })
         this.#el.src = URL.createObjectURL(this.#mse);
         return promise

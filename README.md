@@ -35,6 +35,12 @@ player.loaderAsync(url).then(c => {
 ``` 
 ## [更新](/CHANGELOG.md)
 
+### 1.2.0-alpha.1 
+ 
+MPDMSE FetchSchedule 完善功能  
+增加（转换URL缓存 Map集合，上次差异化响应 Map集合，缓存转换URLsMap，转换列队获取响应 ，缓存转换URLsMap，缓存响应 Map，获取响应 Map集合）
+
+MPDMSE SourceBufferTask sourceBufferUpdate调整参数 
 
 ### 1.1.0-alpha.1 
 

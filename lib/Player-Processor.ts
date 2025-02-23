@@ -7,7 +7,7 @@ export type RepType = HintedString<"video" | "audio">
 /** 更改 Representation 类型选项 */
 export type SwitchRepOptions = {
     /** 切换模式 */
-    switchMode: "soft" | "radical" | "disable"
+    switchMode: "soft" | "radical" 
 }
 
 /**
@@ -24,7 +24,7 @@ export type Processor = {
     get(repType: RepType): Array<Representation>
 
     /** 切换 Representation 类型 */
-    switch(repType: RepType, rep: Representation, options: SwitchRepOptions): void
+    switch(repType: RepType, rep: Representation, currentTime:number, options: SwitchRepOptions): void
 
 }
 export const isProcessor = (processor: unknown): processor is Processor => {
