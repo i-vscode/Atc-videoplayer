@@ -1,4 +1,5 @@
-import { Representation } from "@lib"
+import { divideAndRound, Representation } from "@lib"
+import { MPDRepresentation } from "./Representation"
 
 /** 范围时间段文件类型 */
 export type RangeTimeFileType = Readonly<{
@@ -14,12 +15,7 @@ const parseInitialization = (repid: string, segmentElement?: Element | null) : R
 
 const parseSegmentFromRangeTimeStringURLs = (() => {
     const mediaReg = /\$Number%(\d+)d\$/;
-    /** 除法结果四舍五入到整数 */
-    const divideAndRound = (dividend: number | string | null, divisor: number | string | null) => {
-        dividend = typeof dividend === "string" ? parseInt(dividend) : dividend;
-        divisor = typeof divisor === "string" ? parseInt(divisor) : divisor; 0
-        return Math.round((dividend ?? 0) / (divisor ?? 0))
-    }
+ 
     const parseSegmentTemplateFromRangeTimeStringURLs = (repid: string, mediaPresentationDuration: number, segmentTemplateElement: Element) => {
         const media = segmentTemplateElement.getAttribute("media")?.replace("$RepresentationID$", repid)
         const mediaRegExecArray = mediaReg.exec(media ?? "")
@@ -77,7 +73,7 @@ export class Segment {
     #rangeTimeURLs: Array<RangeTimeFileType>
     #initialization?: RangeTimeFileType
     get initialization() { return this.#initialization }
-    constructor(representation: Representation, segmentElement?: Element | null,) {
+    constructor(representation: MPDRepresentation, segmentElement?: Element | null,) {
         this.#initialization = parseInitialization(representation.id, segmentElement);        
         this.#rangeTimeURLs = parseSegmentFromRangeTimeStringURLs(representation.id, representation.duration, segmentElement)
     }
@@ -88,6 +84,7 @@ export class Segment {
     }
     /** 获取时间段范围文件 */
     getRangeTimeFiles(startTime: number, endTime: number) {
+        
         const urls = new Array<RangeTimeFileType>()
         for (const r of this.#rangeTimeURLs) {
             if (r.startTime > endTime) break

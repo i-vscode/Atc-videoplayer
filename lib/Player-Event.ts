@@ -4,7 +4,7 @@ import { Representation } from "./Player-Representation";
 /** 定义的事件 和 事件方法中的回传参数 */
 type EventTypes = {
     'loadedmetadata': Representation;
-    'error': PlayerError;
+    'error': PlayerError; 
 };
 export type ValidEvents = (string & {}) | keyof EventTypes;
 export type ListenerParameters<T> = T extends keyof EventTypes ? EventTypes[T] : unknown

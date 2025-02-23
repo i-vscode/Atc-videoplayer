@@ -33,20 +33,22 @@ export class SourceBufferTask {
     /** 源缓存更新 */
     sourceBufferUpdate(currentTime: number) {
         const timeRanges = this.#sourceBuffer.buffered;
-        let  bufferedTime = currentTime;
+        let bufferedTime = currentTime;
         for (let index = 0; index < timeRanges.length; index++) {
             if (bufferedTime >= timeRanges.start(index) && bufferedTime <= timeRanges.end(index)) {
                 bufferedTime = timeRanges.end(index);
                 break
             }
         } 
-        this.#fetch(currentTime, bufferedTime).then(async responses =>this.run(responses));
+        this.#fetch(currentTime, bufferedTime).then(async responses =>{
+            this.run(responses);
+        });
         return this;
 
     }
     isLastFile(currentTime: number) {
         return this.#map.get(this.#current)?.isLastFile(currentTime) ?? true
-    }
+    } 
     clear() {
         this.#map.clear();
         return this
@@ -59,10 +61,10 @@ export class SourceBufferTask {
         }
         return this
     }
-    run(results?: Array<Response | ArrayBuffer | (() => void)> | Response | ArrayBuffer | (() => void)) {       
-        
+    run(results?: Array<Response | ArrayBuffer | (() => void)> | Response | ArrayBuffer | (() => void)) {
+
         if (results && this.#mse.readyState === "open") {
-            results = Array.isArray(results) ? results : [results]            
+            results = Array.isArray(results) ? results : [results]
             results.forEach(result => {
                 if (typeof result === "function") {
                     this.#tasks.push(result)
@@ -71,29 +73,31 @@ export class SourceBufferTask {
                         this.run(() => this.#sourceBuffer.appendBuffer(a)) 
                     })
                 } else if (result instanceof ArrayBuffer) {
-                    this.#tasks.push(() => this.#sourceBuffer.appendBuffer(result))
+                    this.#tasks.push(() => {
+                        this.#sourceBuffer.appendBuffer(result) 
+                    })
                 }
             })
         }
-        if (this.#sourceBuffer.updating === false) { 
+        if (this.#sourceBuffer.updating === false) {
             this.#tasks.shift()?.();
         }
         return this
-    } 
+    }
 
     /**切换 Representation  */
     switch(rep: Representation, currentTime: number, options: SwitchRepOptions) {
-        if (this.#map.has(rep) && this.#current !== rep) { 
+        if (this.#map.has(rep) && this.#current !== rep) {
             this.#current = rep
             this.#fetch(currentTime, "initialization").then(async responses => {
-               this.run(() => this.#sourceBuffer.changeType(`${rep.mimeType}; codecs="${rep.codecs}"`))
+                this.run(() => this.#sourceBuffer.changeType(`${rep.mimeType}; codecs="${rep.codecs}"`))
                 switch (options?.switchMode) {
                     case "radical":
-                       this.run([() => this.#sourceBuffer.abort(), () => this.#sourceBuffer.remove(0, Infinity)])
+                        this.run([() => this.#sourceBuffer.abort(), () => this.#sourceBuffer.remove(0, Infinity)])
                         break;
-                    case "soft": 
+                    case "soft":
                         break
-                } 
+                }
                 this.run(responses)
             })
         }

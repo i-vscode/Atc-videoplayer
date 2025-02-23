@@ -1,6 +1,14 @@
 # Atc-videoplayer dash流播放器 变更日志
 
+### 1.3.0-alpha.1
+ 
+新增 FragmentMp4 处理器
 
+新增 tools / FragmentMp4-Tools 工具页面
+
+修改类型名称 ProcessorType => ProcessorFactory 
+
+增加 Player-Options 的配置属性
 
 ### 1.2.0-alpha.1 
  

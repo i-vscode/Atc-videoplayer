@@ -29,15 +29,27 @@ player.loaderAsync(url).then(c => {
     /** 装载成功 
      *  可根据需要设置或切换不同码流rep源
      */
-     c("video")?.at(0)?.setRep()
-     c("audio")?.at(0)?.setRep()
+     c("video")?.at(0)?.switch()
+     c("audio")?.at(0)?.switch()
 })
 ``` 
 ## [更新](/CHANGELOG.md)
 
+### 1.3.0-alpha.1
+ 
+新增 FragmentMp4 处理器
+
+新增 tools / FragmentMp4-Tools 工具页面
+
+修改类型名称 ProcessorType => ProcessorFactory 
+
+增加 Player-Options 的配置属性
+
+
 ### 1.2.0-alpha.1 
  
-MPDMSE FetchSchedule 完善功能  
+MPDMSE FetchSchedule 完善功能
+
 增加（转换URL缓存 Map集合，上次差异化响应 Map集合，缓存转换URLsMap，转换列队获取响应 ，缓存转换URLsMap，缓存响应 Map，获取响应 Map集合）
 
 MPDMSE SourceBufferTask sourceBufferUpdate调整参数 
@@ -48,8 +60,7 @@ MPDMSE SourceBufferTask sourceBufferUpdate调整参数
 
 修改 Player中的方法名和处理逻辑
 
-MPDMSE 处理器增加FetchSchedule调度类
-
+MPDMSE 处理器增加FetchSchedule调度类 
 
 ### 1.0.0-alpha.3
 

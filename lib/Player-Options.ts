@@ -8,9 +8,9 @@ export class PlayerOptions {
     /**最大缓冲时间 (秒)*/
     maxBufferTime: number = 120; 
     /**  转换过期时间  (秒) */
-    cconvertExpiryTime: number = 3600;
+    convertExpiryTime: number = 3600;
     /** 源缓冲更新最小频率 (秒) */
-    sourceBufferUpdateMinFrequency: number = 2;
+    sourceBufferUpdateMinFrequency: number = 1;
     /** 
      * 分段文件 字符串转URL 的转换策略  
      * @example 
@@ -28,8 +28,9 @@ export class PlayerOptions {
      * @deprecated  暂时未实现
      */
     fetchScheduleStrategy: "Single" | "Group" | "Dynamic" = "Single"
-    constructor(p?: Partial<PlayerOptions>) {
+    constructor(p?: Partial<PlayerOptions>) {        
         Object.assign(this, p)
+        if(this.minBufferTime>this.maxBufferTime) this.maxBufferTime = this.minBufferTime
         Object.freeze(this)
     }
 }

@@ -3,8 +3,8 @@
 export type Representation = {
     /** id */
     readonly id: string
-    /** 此片段在整个媒体的开始时间 */    
-    readonly startTime: number 
+    /** 此片段在整个媒体的开始时间 */
+    readonly startTime: number
     /** 此片段的持续时间 */
     readonly duration: number
     /** 编码 */
@@ -27,7 +27,7 @@ export const isRepresentation = (r: unknown): r is Representation => {
         !!r && typeof r === "object" &&
         typeof Reflect.get(r, "id") === "string" &&
         typeof Reflect.get(r, "startTime") === "number" &&
-        typeof Reflect.get(r, "duration") === "number" &&
+        typeof Reflect.get(r, "duration") === "number"  &&
         typeof Reflect.get(r, "codecs") === "string" &&
         typeof Reflect.get(r, "mimeType") === "string" &&
         typeof Reflect.get(r, "bandwidth") === "number" &&
@@ -39,9 +39,10 @@ export const isRepresentation = (r: unknown): r is Representation => {
 
 /** 视频比例 计算方法 */
 export const getSar = (width: number, height: number): Sar => {
+    width = Number.isInteger(width) ? width : 0
+    height = Number.isInteger(height) ? height : 0
     // 计算给定宽高的比例
     const ratio = width / height;
-
     // 定义16:9 和 16:10的比例
     const ratio16by9 = 16 / 9;
     const ratio16by10 = 16 / 10;

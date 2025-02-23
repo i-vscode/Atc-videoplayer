@@ -17,7 +17,12 @@ export const throttle = <Fn extends (...args: any) => void>(callback: Fn, durati
         }
     }
 }
-
+/** 除法结果四舍五入到整数 */
+export const divideAndRound = (dividend: number | string | null, divisor: number | string | null) => {
+    dividend = typeof dividend === "string" ? parseInt(dividend) : dividend;
+    divisor = typeof divisor === "string" ? parseInt(divisor) : divisor; 0
+    return Math.round((dividend ?? 0) / (divisor ?? 0))
+}
 /**
  * 解析为正整数 
  * @param s 要解析的字符串

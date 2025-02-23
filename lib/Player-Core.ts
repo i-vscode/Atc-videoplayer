@@ -1,11 +1,10 @@
 
 import { PlayerOptions } from "./Player-Options";
-import { throttle } from "./Player-Tools";
-import { PlayerEventEmitter, type ValidEvents, type Listener, PlayerEvent } from "./Player-Event";
+import { type ValidEvents, type Listener, PlayerEvent } from "./Player-Event";
 import { Representation } from "./Player-Representation";
 import { PlayerError } from "./Player-Error";
-import type { Processor, ProcessorType, RepType } from "./Player-Processor";
-import { isProcessor, SwitchRepOptions } from "./Player-Processor";
+import type { Processor, ProcessorFactory, RepType } from "./Player-Processor";
+import { isProcessor, isProcessorFactory, SwitchRepOptions } from "./Player-Processor";
 
 
 /** 一个空的 处理器 为了避免 PlayerCore.processor为空 */
@@ -13,17 +12,27 @@ const NullProcessor = new class implements Processor {
     constructor() { }
     get(): Array<Representation> { return [] }
     switch(): void { }
-    get src(){return ""}
+    get src() { return "" }
     sourceBufferUpdate(): void { }
 }
 
-const processorList = new Map<ProcessorType["name"], ProcessorType["asyncFunctionProcessorInstance"]>()
+const processorList = new Map<string, ProcessorFactory>()
 
-const getRepList = (repType: RepType, processor: Processor,currentTime:number) =>
-      processor.get(repType).map(rep => ({ ...rep, switch(options: SwitchRepOptions = { switchMode: "soft" }) { 
-      //  console.log("mpd-getRepList",options);
-        processor.switch(repType, rep,currentTime, options)    
-    } })) || []
+const getRepList = (repType: RepType, processor: Processor, currentTime: number): Array<Representation & { switch(options?: SwitchRepOptions): void }> =>
+    processor.get(repType).map(rep => ({
+        id: rep.id,
+        duration: rep.duration,
+        startTime: rep.startTime,
+        codecs: rep.codecs,
+        bandwidth: rep.bandwidth,
+        mimeType: rep.mimeType,
+        width: rep.width,
+        height: rep.height,
+        sar: rep.sar,
+        switch(options: SwitchRepOptions = { switchMode: "soft" }) {
+            processor.switch(repType, rep, currentTime, options)
+        }
+    })) || []
 
 /**
  * 播放器 核心
@@ -36,29 +45,12 @@ export class PlayerCore {
     #options: PlayerOptions
     #el: HTMLMediaElement
     #processor: Processor = NullProcessor;
-    #playerEvent: PlayerEvent = new PlayerEvent()
+    #playerEvent: PlayerEvent = new PlayerEvent();
+    #interval: number | NodeJS.Timeout = NaN
     get el() { return this.#el }
     constructor(el: HTMLMediaElement | string, options?: Partial<PlayerOptions>) {
         this.#options = new PlayerOptions(options ?? { minBufferTime: 13 })
-        this.#el = typeof el === "string" ? document.getElementById(el) as HTMLMediaElement : el;
-        if (this.#el instanceof HTMLMediaElement) {
-            this.#el.addEventListener("loadedmetadata", () => {
-                //console.log("loadedmetadata");
-                
-                //this.#processor?.sourceBufferUpdate(188);
-            })
-            this.#el.addEventListener("progress", () => {
-               // this.#processor?.sourceBufferUpdate(this.#el!.currentTime);
-            })
-            this.#el?.addEventListener("timeupdate", throttle(() => {
-              //  this.#processor?.sourceBufferUpdate(this.#el!.currentTime);
-            }, this.#options.sourceBufferUpdateMinFrequency * 1000));
-            this.#el.addEventListener("seeking", () => {
-                console.log("seeking--11");
-                
-                this.#processor?.sourceBufferUpdate(this.#el!.currentTime);
-            });
-        }
+        this.#el = typeof el === "string" ? document.getElementById(el) as HTMLMediaElement : el; 
     }
     /** 添加事件 */
     on<T extends ValidEvents>(event: T, listener: Listener<T>) {
@@ -79,12 +71,17 @@ export class PlayerCore {
             const playOptions = new PlayerOptions(Object.assign(Object.assign({}, this.#options), options))
             const response = await Promise.resolve(
                 (result instanceof URL || typeof result === "string") && URL.canParse(result) ? fetch(result, { method: "HEAD" }) : result
-            )            
-            if (response instanceof Response && response.ok || typeof response === "object") {
-                for await (const processor of processorList.values().map(p => p(response, this.#el, playOptions, this.#playerEvent.emit))) {
+            )
+            if (response instanceof Response && response.ok || typeof response === "object") {                
+                for await (const processor of processorList.values().map(p => p.asyncCreateProcessorInstance(response, this.#el, playOptions, this.#playerEvent.emit))) {
                     if (isProcessor(processor)) {
-                        this.#processor = processor                         
-                        return (repType: RepType) => getRepList(repType, this.#processor,this.#el!.currentTime)
+                        this.#processor = processor;
+                        clearInterval(this.#interval)
+                        this.#interval = setInterval(() => {                          
+                            const currentTime = Math.trunc((this.#el.currentTime / 60) * 10) * 6
+                            if(this.#el.error === null){ processor.sourceBufferUpdate(currentTime);}
+                        }, this.#options.sourceBufferUpdateMinFrequency * 1000);
+                        return (repType: RepType) => getRepList(repType, this.#processor, this.#el!.currentTime)
                     }
                 }
             }
@@ -93,15 +90,15 @@ export class PlayerCore {
         throw new PlayerError(1, "el 为空或者不为HTMLMediaElement类型", this.#el)
     }
 
-    get(repType: RepType) { return getRepList(repType, this.#processor,this.#el!.currentTime) }
+    get(repType: RepType) { return getRepList(repType, this.#processor, this.#el!.currentTime) }
 
     /** 处理器 遍历器 */
     static processorEntries() { return processorList.entries() }
 
     /** 添加处理器  静态方法*/
-    static setProcessor(processorType: ProcessorType) {
-        if (typeof processorType.name === "string" && typeof processorType.asyncFunctionProcessorInstance === "function") {
-            processorList.set(processorType.name, processorType.asyncFunctionProcessorInstance)
+    static setProcessor(processorFactory: ProcessorFactory) {
+        if (isProcessorFactory(processorFactory)) {
+            processorList.set(processorFactory.name, processorFactory)
         }
     }
 } 

@@ -2,6 +2,9 @@ import { Representation, Sar, getSar, parsePositiveInteger } from "@lib";
 import { Segment } from "./Segment";
 import { parsePTdurationToSeconds } from "./Tools";
 
+export type MPDRepresentation = Representation &{
+    duration:number
+}
 
 const parseAttributePTdurationToSeconds = (element: Element | null, attributeName: string, defaultValue = NaN): number => {
     if (element && attributeName) {
@@ -12,7 +15,7 @@ const parseAttributePTdurationToSeconds = (element: Element | null, attributeNam
     return defaultValue
 }
 /** 解析 RepresentationElement 元素*/
-export const parseRepresentationElement = (repElement: Element, duration: number, segmentElement: Element): [Representation, Segment] => {
+export const parseRepresentationElement = (repElement: Element, duration: number, segmentElement: Element): [MPDRepresentation, Segment] => {
     const rep = {
         id: repElement.getAttribute("id") || "",
         startTime: parseAttributePTdurationToSeconds(repElement, "start"),
