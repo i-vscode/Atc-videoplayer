@@ -22,4 +22,9 @@ export default defineConfig({
             exclude: ["@src", "vue", "entry"], 
         }),
     ],
+    resolve: {
+        alias: [ 
+            { find: '@lib', replacement:'/lib/' }, 
+        ],
+    }
 })
