@@ -1,5 +1,8 @@
 # Atc-videoplayer dash流播放器 变更日志
 
+### 1.3.2
+ 
+修复FragmentMp4 最后一个分段的加载问题
 
 ### 1.3.1
 
