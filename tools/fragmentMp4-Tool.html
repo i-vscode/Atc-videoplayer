@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FragmentMp4-创建适配此项目的媒体描述JSON文件</title>
+    <script src="fragmentMp4-Tool.js" defer></script>
+    <style>
+        body>div {
+            width: 80%;
+            margin: 0 auto
+        }
+
+        body>div>p {
+            background-color: antiquewhite;
+            padding: 2rem;
+        }
+
+        button {
+            background-color: rgb(121, 158, 236);
+            border: none;
+            padding: 1rem;
+            border-radius: 5px;
+            margin-right: 1rem;
+        }
+
+        button:hover {
+            background-color: rgb(148, 182, 255);
+        }
+
+        body>div>ul#slist {
+            list-style-type: none;
+            padding: 0;
+        
+        }
+        
+        body>div>ul#slist li * {
+            vertical-align: middle;
+        }
+        body>div>ul#slist li span {
+            margin-left: 1rem;
+        }       
+         body>div>ul#slist li input{ 
+            width: 6.2rem;
+        }
+        body>div>ul#slist li input[type="file"]{ 
+            width: 12rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div>
+        <h1>
+            创建适配此项目 FragmentMp4 的媒体描述JSON文件
+        </h1>
+        <h3>
+            1、使用 ffmpeg 分割流并且转换分辨率
+        </h3>
+        <p>
+            ffmpeg -i &lt;输入文件&gt; -map 0:v:0 -b:v 120k -an &lt;输出文件&gt; -map 0:v:0 -b:v 1000k -an &lt;输出文件&gt;
+            -map 0:a:0 -c:a copy -vn &lt;输出文件&gt;
+        </p>
+        <h3>
+            2、使用 mp4fragment.exe 把文件转换为FMP4(分段类型的MP4)文件
+        </h3>
+        <p>
+            mp4fragment.exe --fragment-duration 24000 --index &lt;输入文件&gt; &lt;输出文件&gt;
+        </p>
+        <h3>
+            常用参数
+        </h3>
+        <p>
+            视频流常用参数 trackName : video , codecs : avc1.64081f , mimeType : video/mp4 <br /><br />
+            音频流常用参数 trackName : audio , codecs : mp4a.40.2 , mimeType : audio/mp4
+        </p>
+        <button id="addstreambutton">增加流 + </button>
+        <button id="generatestreambutton">生成 JSON </button>
+        <span> baseUrl :</span>
+        <input type="text" id="baseUrl" />
+        <span> duration :</span>
+        <input type="text" id="duration" />
+        <ul id="slist">
+           
+        </ul>
+
+    </div> 
+</body>
+
+</html>

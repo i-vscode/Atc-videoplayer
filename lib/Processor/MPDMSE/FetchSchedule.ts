@@ -7,13 +7,15 @@ import { type RangeTimeFileType, Segment } from "./Segment";
 export type FetchSchedule = {
     /**
      *  载入初始化分段文件 initialization
+     * @returns Array<Response> | undefined
      */
-    (currentTime: number, bufferedTimeOrInit: "initialization"): Promise<Response[]>,
+    (currentTime: number, bufferedTimeOrInit: "initialization"): Promise<Array<Response> | undefined>,
     /**
      * @param currentTime 当前播放时间
      * @param bufferedTime 已经缓存时间
+     * @returns Array<Response> | undefined
      */
-    (currentTime: number, bufferedTimeOrInit: number): Promise<Response[]>
+    (currentTime: number, bufferedTimeOrInit: number): Promise<Array<Response> | undefined>
 }
 
 /** 创建 Fetch调度 */
@@ -99,7 +101,7 @@ export const createFetchScheduleFactoryMethod = (mpdConverter: MPDDefaultConvert
     }
     //缓存转换URLsMap
     const cacheConverterURLsMap = (urlsMap: Map<string, URL | undefined>) => {
-        if (playerOptions.cconvertExpiryTime > 45) {
+        if (playerOptions.convertExpiryTime > 45) {
             urlsMap.forEach((url, key) => {
                 if (url) { converterCacheURLsMap.set(key, url)}
             })
@@ -107,7 +109,7 @@ export const createFetchScheduleFactoryMethod = (mpdConverter: MPDDefaultConvert
                 urlsMap.forEach((_url, key) => { converterCacheURLsMap.delete(key)
                     
                 })
-            }, (playerOptions.cconvertExpiryTime - 30) * 1000)
+            }, (playerOptions.convertExpiryTime - 30) * 1000)
         }
     }
     //缓存响应 Map
@@ -145,12 +147,14 @@ export const createFetchScheduleFactoryMethod = (mpdConverter: MPDDefaultConvert
         const fetchSchedule = async (currentTime: number, bufferedTimeOrInit: number | "initialization") => {
             if (typeof currentTime === "number" && Number.isFinite(currentTime)) {
                 const segment = getSegmentMethod()
+                 
                 if (bufferedTimeOrInit === "initialization" && segment.initialization) {
                     return asyncLastDifferenceFetchURLs(
                         [segment.initialization, ...segment.getRangeTimeFiles(currentTime, currentTime + playerOptions.minBufferTime)], false)
                 } else if (typeof bufferedTimeOrInit === "number" && Number.isFinite(bufferedTimeOrInit)) {
                     return asyncLastDifferenceFetchURLs(segment.getRangeTimeFiles(bufferedTimeOrInit, currentTime + playerOptions.maxBufferTime), !segment.isLastFile(currentTime + playerOptions.maxBufferTime))
                 }
+                
             }
             return []
         }
