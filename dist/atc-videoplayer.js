@@ -1,404 +1,115 @@
-const mediaReg = /\$Number%(\d+)d\$/;
-const reptms = /^PT(?:(\d+\.*\d*)H)?(?:(\d+\.*\d*)M)?(?:(\d+\.*\d*)S)?$/;
-const PTdurationToSeconds = (PT) => {
-  let hours = 0, minutes = 0, seconds = 0;
-  if (typeof PT === "string") {
-    if (reptms.test(PT)) {
-      var matches = reptms.exec(PT);
-      if (matches?.[1])
-        hours = Number(matches[1]);
-      if (matches?.[2])
-        minutes = Number(matches[2]);
-      if (matches?.[3])
-        seconds = Number(matches[3]);
-      return Number((hours * 3600 + minutes * 60 + seconds).toFixed(2));
-    }
-  }
-  return NaN;
-};
-class SegmentTemplate {
-  /** 持续时间  (持续时间 / 刻度 = 分段时长) */
-  get duration() {
-    return this.#duration;
-  }
-  #duration = NaN;
-  /** 分段时长 (持续时间 / 刻度 = 分段时长)  */
-  segmentduration = NaN;
-  /** 初始化安装文件 */
-  get initialization() {
-    return this.#initialization;
-  }
-  #initialization = "";
-  /** 媒体文件模板 */
-  #getMedia(i) {
-    const mediaRegExecArray = mediaReg.exec(this.#mediaTemplate);
-    if (mediaRegExecArray) {
-      const d = parseInt(mediaRegExecArray[1]);
-      return this.#mediaTemplate.replace(mediaRegExecArray[0], (Array(d).join("0") + i).slice(0 - d));
-    }
-    return void 0;
-  }
-  #mediaTemplate = "";
-  /** 开始数 */
-  get startNumber() {
-    return this.#startNumber;
-  }
-  #startNumber = NaN;
-  /** 跳转 计数*/
-  skipCount(i) {
-    if (i > 0 && this.#S && i <= this.#S.length) {
-      return {
-        duration: this.#S[i - 1],
-        count: i,
-        media: this.#getMedia(i)
-      };
-    } else if (i > 0 && !this.#S) {
-      return {
-        duration: this.#duration,
-        count: i,
-        media: this.#getMedia(i)
-      };
-    }
-    return { duration: NaN, count: NaN, media: void 0 };
-  }
-  /** 时间线数组 SegmentTimeline/S */
-  #S = void 0;
-  constructor(el, representationID) {
-    let timescale = 0, duration = 0;
-    for (const attr of el.attributes) {
-      switch (attr.localName) {
-        case "initialization":
-          this.#initialization = attr.value.replace("$RepresentationID$", representationID);
-          break;
-        case "media":
-          this.#mediaTemplate = attr.value.replace("$RepresentationID$", representationID);
-          break;
-        case "startNumber":
-          this.#startNumber = parseInt(attr.value);
-          break;
-        case "timescale":
-          timescale = parseInt(attr.value);
-          break;
-        case "duration":
-          duration = parseInt(attr.value);
-          break;
-        default:
-          Reflect.set(this, attr.localName, attr.value);
-          break;
-      }
-    }
-    for (const children of el.children) {
-      if (children.localName === "SegmentTimeline") {
-        this.#S = [];
-        for (const Schildren of children.children) {
-          if (Schildren.localName === "S") {
-            for (const arrt of Schildren?.attributes) {
-              if (arrt.localName === "d") {
-                this.#S.push(
-                  Math.floor(parseInt(arrt.value) / timescale * 100) / 100
-                );
-                break;
-              }
-            }
-            continue;
-          }
-        }
-        break;
-      }
-    }
-    if (this.#S && this.#S.length > 0) {
-      this.#duration = Math.floor(this.#S.reduce((previous, current) => current += previous) / this.#S.length * 100) / 100;
-    } else {
-      this.#duration = Math.floor(duration / timescale * 100) / 100;
-    }
+class PlayerOptions {
+  /**最小缓冲时间 (秒) */
+  minBufferTime = 15;
+  /**最大缓冲时间 (秒)*/
+  maxBufferTime = 120;
+  /**  转换过期时间  (秒) */
+  convertExpiryTime = 3600;
+  /** 源缓冲更新最小频率 (秒) */
+  sourceBufferUpdateMinFrequency = 1;
+  /** 
+   * 分段文件 字符串转URL 的转换策略  
+   * @example 
+   * "MuchPossible" （尽可能的）一次转换最多的分段文件 ，减少转换请求
+   * "BufferTime" （缓冲时间）每次根据缓冲时间所需的分段文件 请求转换
+   * "InquireNow" （正在查询）仅转换当前需要加载请求的分段文件
+   * @deprecated  暂时未实现
+   */
+  convertStrategy = "BufferTime";
+  /**
+   * 调度策略 
+   *  @example
+   *  "Single" （单次）每次同步请求一个分段文件，完成后请求下一次
+   *  "Dynamic" （动态 根据已缓存时间，如果距离缓冲时间太远则单组，否则单次
+   * @deprecated  暂时未实现
+   */
+  fetchScheduleStrategy = "Single";
+  constructor(p) {
+    Object.assign(this, p);
+    if (this.minBufferTime > this.maxBufferTime)
+      this.maxBufferTime = this.minBufferTime;
+    Object.freeze(this);
   }
 }
-class Representation {
-  /** id */
-  get id() {
-    return this.#id;
+var QualityTab = /* @__PURE__ */ ((QualityTab2) => {
+  QualityTab2["Auto"] = "auto";
+  QualityTab2["P480"] = "480P";
+  QualityTab2["P720"] = "720P";
+  QualityTab2["P1080"] = "1080P";
+  QualityTab2["P10804K"] = "1080P4K";
+  return QualityTab2;
+})(QualityTab || {});
+
+class PlayerEvent {
+  events;
+  constructor() {
+    this.events = /* @__PURE__ */ new Map();
   }
-  #id = "";
-  /** 媒体类型 */
-  mimeType = "";
-  /**编码器 */
-  codecs = "";
-  /**字节带宽 */
-  get bandwidth() {
-    return this.#bandwidth;
-  }
-  set bandwidth(val) {
-    this.#bandwidth = Number.parseInt(val);
-  }
-  #bandwidth = 0;
-  /** 帧率 */
-  get frameRate() {
-    return this.#frameRate;
-  }
-  #frameRate = NaN;
-  /** 媒体比例 */
-  sar = "";
-  /** 媒体宽度 */
-  get width() {
-    return this.#width;
-  }
-  #width = NaN;
-  /**初始化文件 */
-  get initialization() {
-    return this.#segment?.initialization;
-  }
-  /** 媒体高度 */
-  get height() {
-    return this.#height;
-  }
-  #height = NaN;
-  #segment = void 0;
-  /** 持续时间  (持续时间 / 刻度 = 分段时长) */
-  get duration() {
-    return this.#segment?.duration ?? NaN;
-  }
-  /** 开始数 */
-  get startNumber() {
-    return this.#segment?.startNumber ?? NaN;
-  }
-  /** 跳转 计数 */
-  skipCount(i) {
-    return this.#segment?.skipCount(i) ?? { duration: NaN, count: NaN, media: void 0 };
-  }
-  constructor(representation) {
-    for (const attr of representation.attributes) {
-      if (attr.localName === "id") {
-        this.#id = attr.value;
-        continue;
-      }
-      if (attr.localName === "frameRate") {
-        const parts = attr.value.split("/");
-        this.#frameRate = parseInt(parts[0]) / parseInt(parts[1]);
-        continue;
-      }
-      if (attr.localName === "width") {
-        this.#width = Number.parseInt(attr.value);
-        continue;
-      }
-      if (attr.localName === "height") {
-        this.#height = Number.parseInt(attr.value);
-        continue;
-      }
-      Reflect.set(this, attr.localName, attr.value);
+  /** 订阅事件 */
+  on(event, listener) {
+    if (!this.events.has(event)) {
+      this.events.set(event, /* @__PURE__ */ new Set());
     }
-    for (const children of representation.children) {
-      if (children.localName === "SegmentTemplate") {
-        this.#segment = new SegmentTemplate(children, this.id);
-        break;
-      }
+    const listeners = this.events.get(event);
+    if (listeners) {
+      listeners.add(listener);
     }
   }
-}
-class AdaptationSet {
-  get contentType() {
-    return this.#contentType;
-  }
-  #contentType = "";
-  get representation() {
-    return this.#representation;
-  }
-  #representation = [];
-  /** 帧率 */
-  get frameRate() {
-    return this.#frameRate;
-  }
-  #frameRate = NaN;
-  constructor(adaptationSet) {
-    for (const attr of adaptationSet.attributes) {
-      if (attr.localName === "contentType") {
-        this.#contentType = attr.value;
-        continue;
-      }
-      if (attr.localName === "frameRate") {
-        const parts = attr.value.split("/");
-        this.#frameRate = parseInt(parts[0]) / parseInt(parts[1]);
-        continue;
-      }
-      Reflect.set(this, attr.localName, attr.value);
-    }
-    for (const children of adaptationSet.children) {
-      if (children.localName === "Representation") {
-        this.#representation.push(new Representation(children));
-      }
+  /** 移除订阅的事件 */
+  off(event, listener) {
+    const listeners = this.events.get(event);
+    if (listeners) {
+      listeners.delete(listener);
     }
   }
-}
-class Period {
-  #adaptationSetVideo = [];
-  #adaptationSetAudio = [];
-  get start() {
-    return this.#start;
-  }
-  set start(val) {
-    this.#start = PTdurationToSeconds(val);
-  }
-  #start = NaN;
-  /** 视频适配集 */
-  get videoSet() {
-    return this.#videoSet;
-  }
-  #videoSet = [];
-  /** 音频适配集 */
-  get audioSet() {
-    return this.#audioSet;
-  }
-  #audioSet = [];
-  constructor(period) {
-    for (const attr of period.attributes) {
-      Reflect.set(this, attr.localName, attr.value);
+  /** 触发事件 */
+  emit(event, e) {
+    const listeners = this.events.get(event);
+    if (listeners) {
+      listeners.forEach((listener) => listener(e));
     }
-    for (const children of period.children) {
-      if (children.localName === "AdaptationSet") {
-        const _adaptationSet = new AdaptationSet(children);
-        if (_adaptationSet.contentType.startsWith("video")) {
-          this.#adaptationSetVideo.push(_adaptationSet);
-        } else if (_adaptationSet.contentType.startsWith("audio")) {
-          this.#adaptationSetAudio.push(_adaptationSet);
-        }
-      }
-    }
-    const videoNext = (rep) => {
-      let i = rep.startNumber;
-      const segment = {
-        ...rep.skipCount(i),
-        skip(duration) {
-          i = Math.floor(duration / rep.duration);
-          if (i < rep.startNumber)
-            i = rep.startNumber;
-          return { ...rep.skipCount(i), skip: segment.skip, next: segment.next, previous: segment.previous };
-        },
-        next() {
-          return { ...rep.skipCount(++i), skip: segment.skip, next: segment.next, previous: segment.previous };
-        },
-        previous() {
-          return { ...rep.skipCount(--i), skip: segment.skip, next: segment.next, previous: segment.previous };
-        }
-      };
-      return segment;
+  }
+  /** 只触发一次的订阅 */
+  once(event, listener) {
+    const onceListener = (e) => {
+      listener(e);
+      this.off(event, onceListener);
     };
-    const audioNext = (rep) => {
-      let i = rep.startNumber;
-      const segment = {
-        ...rep.skipCount(i),
-        skip(duration) {
-          i = Math.floor(duration / rep.duration);
-          if (i < rep.startNumber)
-            i = rep.startNumber;
-          return { ...rep.skipCount(i), skip: segment.skip, next: segment.next, previous: segment.previous };
-        },
-        next() {
-          return { ...rep.skipCount(++i), skip: segment.skip, next: segment.next, previous: segment.previous };
-        },
-        previous() {
-          return { ...rep.skipCount(--i), skip: segment.skip, next: segment.next, previous: segment.previous };
-        }
-      };
-      return segment;
-    };
-    this.#adaptationSetVideo.forEach((v) => {
-      v.representation.forEach((r) => {
-        this.#videoSet.push({
-          ...videoNext(r),
-          id: r.id,
-          initialization: r.initialization,
-          codecs: r.codecs,
-          mimeType: r.mimeType,
-          bandwidth: r.bandwidth,
-          width: r.width,
-          height: r.height,
-          frameRate: isNaN(r.frameRate) ? v.frameRate : r.frameRate,
-          startNumber: r.startNumber
-        });
-      });
-    }), this.#adaptationSetAudio.forEach((a) => {
-      a.representation.forEach((r) => {
-        this.#audioSet.push({
-          ...audioNext(r),
-          id: r.id,
-          initialization: r.initialization,
-          codecs: r.codecs,
-          mimeType: r.mimeType,
-          bandwidth: r.bandwidth,
-          startNumber: r.startNumber
-        });
-      });
-    });
-  }
-}
-class MPD {
-  /** 总的时长 持续时间 */
-  get mediaPresentationDuration() {
-    return this.#mediaPresentationDuration;
-  }
-  //set mediaPresentationDuration(val) { this.#mediaPresentationDuration = PTdurationToSeconds(val) }
-  #mediaPresentationDuration = NaN;
-  /** 最大分段场持续时间  指的是加载的 每个m4s段的最大时间  */
-  get maxSegmentDuration() {
-    return this.#maxSegmentDuration;
-  }
-  set maxSegmentDuration(val) {
-    this.#maxSegmentDuration = PTdurationToSeconds(val);
-  }
-  #maxSegmentDuration = NaN;
-  /** 最小缓存时间 */
-  get minBufferTime() {
-    return this.#minBufferTime;
-  }
-  set minBufferTime(val) {
-    if (isFinite(val))
-      this.#minBufferTime = PTdurationToSeconds(val);
-  }
-  #minBufferTime = NaN;
-  /** 媒体阶段数组 */
-  get Period() {
-    return this.#Period;
-  }
-  #Period = [];
-  constructor(mpdstring) {
-    const mpd = new DOMParser().parseFromString(mpdstring, "text/xml").documentElement;
-    for (const attr of mpd.attributes) {
-      if (attr.localName === "mediaPresentationDuration") {
-        this.#mediaPresentationDuration = PTdurationToSeconds(attr.value);
-        continue;
-      }
-      if (attr.localName === "minBufferTime") {
-        this.#minBufferTime = PTdurationToSeconds(attr.value);
-        continue;
-      }
-      Reflect.set(this, attr.localName, attr.value);
-    }
-    for (const children of mpd.children) {
-      switch (children.localName) {
-        case "Period":
-          this.#Period.push(new Period(children));
-          break;
-      }
-    }
+    this.on(event, onceListener);
   }
 }
 
-const fetchMpd = async (url, options) => {
-  return fetch(url).then(
-    async (c) => {
-      if (c.ok) {
-        return Object.assign(new MPD(await c.text()), options);
-      }
-      return void 0;
-    },
-    () => void 0
-  );
-};
+class PlayerError {
+  #code = 0;
+  get code() {
+    return this.#code;
+  }
+  #mse = "";
+  get mse() {
+    return this.#mse;
+  }
+  #original;
+  get original() {
+    return this.#original;
+  }
+  /**
+   * @param code 0 url类型错误
+   * @param code 1 其它类型错误
+   * @param mse 错误信息
+   */
+  constructor(code, mse, original) {
+    this.#code = code;
+    this.#mse = mse;
+    this.#original = original;
+  }
+}
+
 const debounce = (callback, delay = 200) => {
   let t;
   return (...e) => {
     clearTimeout(t);
     t = setTimeout(() => {
-      callback(e);
+      callback(...e);
     }, delay);
   };
 };
@@ -412,261 +123,679 @@ const throttle = (callback, duration = 200) => {
     }
   };
 };
-class SourceBufferTask {
-  #SourceBuffer;
-  #Url;
-  #MPD;
-  #tasks = { list: [], a: () => {
-  } };
-  #arrayBuffers = [];
-  #Rep;
-  /** 最近一个文件下载的比特率 */
-  get bitrate() {
-    return this.#bitrate;
+const divideAndRound = (dividend, divisor) => {
+  dividend = typeof dividend === "string" ? parseInt(dividend) : dividend;
+  divisor = typeof divisor === "string" ? parseInt(divisor) : divisor;
+  return Math.round((dividend ?? 0) / (divisor ?? 0));
+};
+const parsePositiveInteger = (s, defaultValue = 0) => {
+  defaultValue = typeof defaultValue === "number" ? defaultValue : 0;
+  const num = Number.parseInt(s);
+  return Number.isInteger(num) && num >= 0 ? num : defaultValue;
+};
+const parseFromString = (() => {
+  const domParser = new DOMParser();
+  return (string, type) => domParser.parseFromString(string, type);
+})();
+
+const isProcessor = (processor) => {
+  return !!processor && typeof processor === "object" && typeof Reflect.get(processor, "sourceBufferUpdate") === "function" && typeof Reflect.get(processor, "get") === "function" && typeof Reflect.get(processor, "switch") === "function";
+};
+const isProcessorFactory = (processorFactory) => {
+  return !!processorFactory && typeof processorFactory === "object" && typeof Reflect.get(processorFactory, "name") === "string" && typeof Reflect.get(processorFactory, "asyncCreateProcessorInstance") === "function";
+};
+
+const isRepresentation = (r) => {
+  return !!r && typeof r === "object" && typeof Reflect.get(r, "id") === "string" && typeof Reflect.get(r, "startTime") === "number" && typeof Reflect.get(r, "duration") === "number" && typeof Reflect.get(r, "codecs") === "string" && typeof Reflect.get(r, "mimeType") === "string" && typeof Reflect.get(r, "bandwidth") === "number" && typeof Reflect.get(r, "width") === "number" && typeof Reflect.get(r, "height") === "number" && Object.values(Sar).includes(Reflect.get(r, "sar"));
+};
+const getSar = (width, height) => {
+  width = Number.isInteger(width) ? width : 0;
+  height = Number.isInteger(height) ? height : 0;
+  const ratio = width / height;
+  const ratio16by9 = 16 / 9;
+  const ratio16by10 = 16 / 10;
+  const diff16by9 = Math.abs(ratio - ratio16by9);
+  const diff16by10 = Math.abs(ratio - ratio16by10);
+  if (diff16by9 < diff16by10) {
+    return "16:9" /* SixteenByNine */;
+  } else if (diff16by10 < diff16by9) {
+    return "16:10" /* SixteenByTen */;
+  } else {
+    return "Unknown" /* Unknown */;
   }
-  #bitrate = NaN;
-  #runTask(tasks) {
-    tasks.forEach((t) => {
-      this.#tasks.list.push(
-        () => {
-          const d = performance.now();
-          fetch(t.url).then((f) => f.arrayBuffer()).then((a) => {
-            try {
-              this.#bitrate = Math.round(a.byteLength * 8 / (performance.now() - d));
-              if (this.#SourceBuffer.updating) {
-                this.#arrayBuffers.push(new Uint8Array(a));
-              } else {
-                this.#SourceBuffer?.appendBuffer(new Uint8Array(a));
-              }
-            } catch {
-            }
+};
+var Sar = /* @__PURE__ */ ((Sar2) => {
+  Sar2["Unknown"] = "Unknown";
+  Sar2["SixteenByNine"] = "16:9";
+  Sar2["SixteenByTen"] = "16:10";
+  return Sar2;
+})(Sar || {});
+
+const isFragmentMp4ConfigRepresentation = (reps, fragmentMp4Config) => {
+  const url = Reflect.get(fragmentMp4Config, "baseUrl");
+  if (reps && Array.isArray(reps)) {
+    return reps.every((rep) => {
+      const bandwidth = Number.parseInt(Reflect.get(rep, "bandwidth"));
+      const initEndRange = Number.parseInt(Reflect.get(rep, "initEndRange"));
+      const sidxEndRange = Number.parseInt(Reflect.get(rep, "sidxEndRange"));
+      return typeof Reflect.get(rep, "id") === "string" && typeof Reflect.get(rep, "codecs") === "string" && typeof Reflect.get(rep, "mimeType") === "string" && (Number.isInteger(bandwidth) && bandwidth > 0) && URL.canParse(Reflect.get(rep, "url"), url) && (Number.isInteger(initEndRange) && initEndRange > 0) && (Number.isInteger(sidxEndRange) && sidxEndRange > 0) && (Reflect.has(rep, "width") ? typeof Reflect.get(rep, "width") === "number" : typeof Reflect.get(rep, "width") === "undefined") && (Reflect.has(rep, "height") ? typeof Reflect.get(rep, "height") === "number" : typeof Reflect.get(rep, "height") === "undefined");
+    });
+  }
+  return false;
+};
+const isFragmentMp4ConfigMedia = (media, fragmentMp4Config) => {
+  if (media && typeof media === "object") {
+    return Object.entries(media).every(([k, v]) => typeof k === "string" && isFragmentMp4ConfigRepresentation(v, fragmentMp4Config));
+  }
+  return false;
+};
+const isFragmentMp4Config = (fragmentMp4Config) => {
+  if (!fragmentMp4Config || typeof fragmentMp4Config !== "object")
+    return false;
+  if (!URL.canParse(Reflect.get(fragmentMp4Config, "baseUrl")))
+    return false;
+  if (!isFragmentMp4ConfigMedia(Reflect.get(fragmentMp4Config, "media"), fragmentMp4Config))
+    return false;
+  return true;
+};
+const createNormalFragmentMp4ConfigMediaRepresentation = (rep, normalFragmentMp4Config) => {
+  const normalRep = {
+    ...rep,
+    duration: normalFragmentMp4Config.duration,
+    url: new URL(rep.url, normalFragmentMp4Config.baseUrl),
+    bandwidth: Number.parseInt(rep.bandwidth.toString()),
+    initEndRange: Number.parseInt(rep.initEndRange.toString()),
+    sidxEndRange: Number.parseInt(rep.sidxEndRange.toString()),
+    width: Number.parseInt(rep.width?.toString()),
+    height: Number.parseInt(rep.height?.toString())
+  };
+  return normalRep;
+};
+const createNormalFragmentMp4Config = (fragmentMp4Config) => {
+  if (isFragmentMp4Config(fragmentMp4Config)) {
+    const normalFragmentMp4Representation = {
+      duration: Number.parseInt(fragmentMp4Config.duration?.toString() ?? ""),
+      baseUrl: new URL(fragmentMp4Config.baseUrl),
+      media: {}
+    };
+    if (!Number.isFinite(normalFragmentMp4Representation.duration)) {
+      normalFragmentMp4Representation.duration = Infinity;
+    }
+    normalFragmentMp4Representation.media = Object.fromEntries(Object.entries(fragmentMp4Config.media).map(([k, v]) => {
+      return [k, v.map((rep) => createNormalFragmentMp4ConfigMediaRepresentation(rep, normalFragmentMp4Representation))];
+    }));
+    return normalFragmentMp4Representation;
+  }
+};
+
+const B_ftyp = 1718909296, B_moov = 1836019574, B_mvex = 1836475768, B_styp = 1937013104, B_sidx = 1936286840, B_moof = 1836019558, B_mdat = 1835295092, B_mfra = 1835430497;
+const B_mvhd = 1836476516, B_trak = 1953653099;
+const L_mvhd = 1684567661;
+const TypeBoxIdentifierSet = /* @__PURE__ */ new Set([B_ftyp, B_moov, B_mvhd, B_trak, B_mvex, B_styp, B_sidx, B_moof, B_mdat, B_mfra, L_mvhd]);
+const parseSidxBox = (dataView) => {
+  const version = dataView.getUint8(8);
+  if (version === 0 ? dataView.byteLength < 44 : dataView.byteLength < 52) {
+    return;
+  }
+  const sidxBoxMetadata = {
+    version,
+    flags: dataView.getUint8(9) << 16 | dataView.getUint8(10) << 8 | dataView.getUint8(11),
+    reference_ID: dataView.getUint32(12),
+    timescale: dataView.getUint32(16),
+    earliest_presentation_time: version === 0 ? dataView.getUint32(20) : dataView.getBigUint64(20),
+    first_offset: version === 0 ? dataView.getUint32(24) : dataView.getBigUint64(28),
+    reference_count: dataView.getUint16(version === 0 ? 30 : 38),
+    references: []
+  };
+  let offset = version === 0 ? 32 : 40;
+  for (let i = 0; i < sidxBoxMetadata.reference_count; i++) {
+    const reference = {
+      reference_type: (dataView.getUint32(offset) & 2147483648) >>> 31,
+      referenced_size: dataView.getUint32(offset) & 2147483647,
+      subsegment_duration: dataView.getUint32(offset + 4),
+      starts_with_SAP: (dataView.getUint32(offset + 8) & 2147483648) >>> 31,
+      SAP_type: (dataView.getUint32(offset + 8) & 1879048192) >>> 28,
+      SAP_delta_time: dataView.getUint32(offset + 8) & 268435455
+    };
+    sidxBoxMetadata.references.push(reference);
+    offset += 12;
+  }
+  return sidxBoxMetadata;
+};
+const parseMoovBox = (dataView) => {
+  for (const box of findBox(new DataView(dataView.buffer, dataView.byteOffset + 8, dataView.byteLength))) {
+    if (box.nameof === "mvhd") {
+      return parseMvhdBox(box.dataView);
+    }
+  }
+};
+const parseMvhdBox = (dataView) => {
+  return {
+    version: dataView.getUint8(8),
+    flags: dataView.getUint32(8) & 16777215,
+    creationTime: dataView.getUint32(8 + 4),
+    modificationTime: dataView.getUint32(16),
+    timescale: dataView.getUint32(20),
+    duration: dataView.getUint32(24)
+  };
+};
+const findEndianTypeSwitch = (atomType) => {
+  switch (atomType) {
+    case B_ftyp:
+      return "ftyp";
+    case B_moov:
+      return "moov";
+    case (B_mvhd ):
+      return "mvhd";
+    case B_trak:
+      return "trak";
+    case B_mvex:
+      return "mvex";
+    case B_styp:
+      return "styp";
+    case B_sidx:
+      return "sidx";
+    case B_moof:
+      return "moof";
+    case B_mdat:
+      return "mdat";
+    case B_mfra:
+      return "mfra";
+    default:
+      return "unknown";
+  }
+};
+const findBox = function* (dataView) {
+  let isLittleEndian = void 0;
+  for (let offset = 0; offset < dataView.byteLength - 8; offset++) {
+    if (isLittleEndian === void 0) {
+      if (TypeBoxIdentifierSet.has(dataView.getUint32(offset + 4, false))) {
+        isLittleEndian = false;
+      } else if (TypeBoxIdentifierSet.has(dataView.getUint32(offset + 4, true))) {
+        isLittleEndian = true;
+      }
+    }
+    if (isLittleEndian !== void 0) {
+      const atomType = dataView.getUint32(offset + 4, isLittleEndian);
+      if (TypeBoxIdentifierSet.has(atomType)) {
+        const byteLength = dataView.getUint32(offset, isLittleEndian);
+        yield {
+          dataView: new DataView(dataView.buffer, offset + dataView.byteOffset, byteLength),
+          nameof: findEndianTypeSwitch(atomType)
+        };
+        offset += byteLength - 1;
+      }
+    }
+  }
+};
+const parseFMP4Metadata = (arrayBuffer) => {
+  const dataView = new DataView(arrayBuffer);
+  let mvhdBoxMetadata = void 0;
+  let sidxBoxMetadata = void 0;
+  for (const box of findBox(dataView)) {
+    if (box.nameof === "moov") {
+      mvhdBoxMetadata = parseMoovBox(box.dataView);
+    } else if (box.nameof === "sidx") {
+      sidxBoxMetadata = parseSidxBox(box.dataView);
+      break;
+    }
+  }
+  if (mvhdBoxMetadata && sidxBoxMetadata) {
+    return { ...mvhdBoxMetadata, inddexRange: sidxBoxMetadata };
+  }
+};
+
+class Segment {
+  #rangeTimes = new Array();
+  #duration = NaN;
+  get duration() {
+    return this.#duration;
+  }
+  constructor(initSidxMetadataArrayBuffer, byteOffset) {
+    const initSidxMetadata = parseFMP4Metadata(initSidxMetadataArrayBuffer);
+    if (initSidxMetadata) {
+      this.#duration = initSidxMetadata.duration;
+      const timescale = initSidxMetadata?.inddexRange.timescale;
+      initSidxMetadata?.inddexRange.references.reduce((accumulator, reference) => {
+        const currentRangeTime = {
+          startTime: Math.trunc(accumulator.float / 100),
+          endTime: Math.ceil(accumulator.float / 100 + reference.subsegment_duration / timescale),
+          float: accumulator.float + Math.trunc(reference.subsegment_duration / timescale * 100),
+          byteOffset: accumulator.byteOffset + accumulator.byteLength,
+          byteLength: reference.referenced_size
+        };
+        this.#rangeTimes.push({
+          startTime: currentRangeTime.startTime,
+          endTime: currentRangeTime.endTime,
+          startByteRange: currentRangeTime.byteOffset,
+          endByteRange: currentRangeTime.byteOffset + currentRangeTime.byteLength - 1
+        });
+        return currentRangeTime;
+      }, { startTime: 0, endTime: 0, float: 0, byteLength: 0, byteOffset });
+    }
+  }
+  /** 获取媒体时间段范围 */
+  getMediaRangeSet(startTime, endTime) {
+    const ranges = /* @__PURE__ */ new Set();
+    for (const r of this.#rangeTimes) {
+      if (r.startTime > endTime)
+        break;
+      if (startTime <= r.endTime && endTime >= r.startTime) {
+        if (r === this.#rangeTimes.at(-1)) {
+          ranges.add({
+            startTime: r.endTime,
+            endTime: r.endTime,
+            startByteRange: r.startByteRange,
+            endByteRange: 0
           });
+        } else {
+          ranges.add(r);
         }
-      );
-    });
-    if (this.#SourceBuffer.updating == false) {
-      this.#tasks.list.shift()?.();
-    }
-  }
-  /** 重新设置 rep，需要 mimeType/codecs属性一样才会设置成功*/
-  setRep(rep, url) {
-    if (this.#Rep?.mimeType !== rep.mimeType || this.#Rep?.codecs !== rep.codecs) {
-      this.#SourceBuffer.changeType(`${rep?.mimeType}; codecs="${rep?.codecs}"`);
-      if (rep?.initialization) {
-        this.#runTask([{ url: new URL(rep.initialization, this.#Url) }]);
       }
     }
-    this.#Rep = rep;
-    if (url)
-      this.#Url = url;
-  }
-  addTask(timeupdate, mediaPresentationDuration, Ignorebuffered = false) {
-    if (!this.#Rep)
-      return;
-    const bufferTime = Number.isFinite(this.#MPD.minBufferTime) ? timeupdate + this.#MPD.minBufferTime : timeupdate;
-    const irep = Math.ceil((bufferTime > mediaPresentationDuration ? mediaPresentationDuration : bufferTime) / this.#Rep.duration);
-    let buffered = timeupdate;
-    if (Ignorebuffered === false) {
-      for (let index = 0; index < this.#SourceBuffer?.buffered.length; index++) {
-        if (this.#SourceBuffer.buffered.start(index) < timeupdate) {
-          buffered = this.#SourceBuffer.buffered.end(index);
-        }
-        if (buffered > bufferTime)
-          return;
-      }
-    } else if (Ignorebuffered === true) {
-      this.#tasks.list.length = 0;
-    }
-    if (Math.abs(mediaPresentationDuration - buffered) < (this.#Rep?.duration ?? 2) / 2)
-      return;
-    const tasks = [];
-    let segment = this.#Rep.skip(timeupdate > buffered ? timeupdate : buffered);
-    if (Ignorebuffered === false && segment.count > this.#Rep.startNumber)
-      segment = segment.next();
-    while (segment.media && segment.count <= irep) {
-      const url = new URL(segment.media, this.#Url);
-      tasks.push({ url, duration: segment.duration });
-      segment = segment.next();
-    }
-    this.#runTask(tasks);
-  }
-  constructor(mse, mpd, url) {
-    this.#SourceBuffer = mse.addSourceBuffer(`video/mp4; codecs="avc1.64001f"`);
-    this.#Url = url;
-    this.#MPD = mpd;
-    mse.addEventListener("sourceclose", () => {
-      this.#tasks.list.length = 0;
-    });
-    this.#SourceBuffer.addEventListener("updateend", () => {
-      const arrayBuffer = this.#arrayBuffers.shift();
-      if (arrayBuffer)
-        this.#SourceBuffer?.appendBuffer(arrayBuffer);
-      this.#tasks.list.shift()?.();
-    });
+    return ranges;
   }
 }
-class VideoDash {
+
+class FMp4Representation {
+  #id;
+  get id() {
+    return this.#id;
+  }
+  #startTime;
+  get startTime() {
+    return this.#startTime;
+  }
+  #duration;
+  get duration() {
+    return this.#duration;
+  }
+  #codecs;
+  get codecs() {
+    return this.#codecs;
+  }
+  #mimeType;
+  get mimeType() {
+    return this.#mimeType;
+  }
+  #bandwidth;
+  get bandwidth() {
+    return this.#bandwidth;
+  }
+  #width;
+  get width() {
+    return this.#width;
+  }
+  #height;
+  get height() {
+    return this.#height;
+  }
+  #sar;
+  get sar() {
+    return this.#sar;
+  }
+  #url;
+  get url() {
+    return this.#url;
+  }
+  #Segment;
+  #initEndRange;
+  #sidxEndRange;
+  #asyncInitSidxMetadata = (() => {
+    let initSidxMetadata = void 0;
+    return () => {
+      if (initSidxMetadata === void 0) {
+        initSidxMetadata = fetch(this.#url, { headers: {
+          range: `bytes=0-${this.#sidxEndRange}`
+        } }).then((r) => {
+          return r && r.ok ? r.arrayBuffer() : void 0;
+        }).catch(() => {
+          return void 0;
+        });
+      }
+      return Promise.resolve(initSidxMetadata);
+    };
+  })();
+  async asyncFetchInit() {
+    return this.#asyncInitSidxMetadata().then((arrayBuffer) => arrayBuffer ? arrayBuffer.slice(0, this.#initEndRange) : void 0);
+  }
+  async asyncFetchSegment() {
+    if (this.#Segment)
+      return this.#Segment;
+    return this.#asyncInitSidxMetadata().then((arrayBuffer) => arrayBuffer ? this.#Segment = new Segment(arrayBuffer, this.#sidxEndRange) : void 0);
+  }
+  constructor(fRepresentation) {
+    this.#id = fRepresentation.id;
+    this.#codecs = fRepresentation.codecs;
+    this.#mimeType = fRepresentation.mimeType;
+    this.#startTime = 0;
+    this.#duration = fRepresentation.duration;
+    this.#bandwidth = fRepresentation.bandwidth;
+    this.#width = fRepresentation.width || NaN;
+    this.#height = fRepresentation.height || NaN;
+    this.#sar = getSar(fRepresentation.width || NaN, fRepresentation.height || NaN);
+    this.#url = fRepresentation.url;
+    this.#initEndRange = fRepresentation.initEndRange;
+    this.#sidxEndRange = fRepresentation.sidxEndRange;
+  }
+}
+
+class SourceBufferTask {
+  #repSet = /* @__PURE__ */ new Set();
+  #mse;
+  #sourceBuffer;
+  #currentRep;
+  #fetch;
+  #tasks = new Array();
+  constructor(mse, fetchScheduleFactoryMethod) {
+    this.#mse = mse;
+    this.#sourceBuffer = mse.addSourceBuffer(`video/mp4; codecs="avc1.64001f,mp4a.40.2"`);
+    this.#fetch = fetchScheduleFactoryMethod(() => this.#currentRep);
+    this.#sourceBuffer.addEventListener("updateend", () => {
+      this.run();
+    });
+  }
+  sourceBufferUpdate(currentTime) {
+    const timeRanges = this.#sourceBuffer.buffered;
+    let bufferedTime = currentTime;
+    for (let index = 0; index < timeRanges.length; index++) {
+      if (currentTime >= timeRanges.start(index) && currentTime <= timeRanges.end(index)) {
+        if (Math.ceil(timeRanges.end(index)) >= Math.trunc(Math.min(this.#currentRep?.duration ?? Infinity, this.#mse.duration)))
+          return true;
+        bufferedTime = timeRanges.end(index);
+        break;
+      }
+    }
+    this.#fetch(currentTime, bufferedTime).then((fMp4Uint8Array) => {
+      this.run(fMp4Uint8Array);
+    });
+    return false;
+  }
+  /** 移除当前sourceBuffer源并清除适配集和任务列表*/
+  remove() {
+    this.#mse.removeSourceBuffer(this.#sourceBuffer);
+    return this.clear();
+  }
+  /** 清除已保存的适配集，当前任务列表 */
+  clear() {
+    this.#repSet.clear();
+    return this;
+  }
+  run(results) {
+    if (results && this.#mse.readyState !== "closed") {
+      results = Array.isArray(results) ? results : [results];
+      results.forEach((result) => {
+        if (typeof result === "function") {
+          this.#tasks.push(result);
+        } else if (result instanceof ArrayBuffer || result instanceof Uint8Array) {
+          this.run(() => {
+            this.#sourceBuffer.appendBuffer(result);
+          });
+        }
+      });
+    }
+    if (this.#sourceBuffer.updating === false) {
+      this.#tasks.shift()?.();
+    }
+    return this;
+  }
+  set(fragmentMp4Representations) {
+    this.clear();
+    fragmentMp4Representations.forEach((fragmentMp4Representation) => {
+      this.#repSet.add(new FMp4Representation(fragmentMp4Representation));
+    });
+    return this;
+  }
+  switch(rep, currentTime, options) {
+    if (this.#repSet.has(rep) && this.#currentRep !== rep) {
+      this.#currentRep = rep;
+      this.#currentRep.asyncFetchInit().then((init) => {
+        if (init) {
+          if (this.#mse.duration > 0) {
+            switch (options?.switchMode) {
+              case "radical":
+                this.#fetch(currentTime, 0).then((fMp4Uint8Array) => {
+                  this.run([
+                    () => this.#sourceBuffer.remove(0, Infinity),
+                    () => this.#sourceBuffer.changeType(`${rep.mimeType}; codecs="${rep.codecs}"`),
+                    init,
+                    fMp4Uint8Array
+                  ]);
+                });
+                break;
+              case "soft":
+                this.#fetch(currentTime, 0).then((fMp4Uint8Array) => {
+                  this.run([
+                    () => this.#sourceBuffer.changeType(`${rep.mimeType}; codecs="${rep.codecs}"`),
+                    init,
+                    fMp4Uint8Array
+                  ]);
+                });
+                break;
+            }
+          } else {
+            this.run([() => this.#sourceBuffer.changeType(`${rep.mimeType}; codecs="${rep.codecs}"`), init]);
+          }
+        }
+      });
+    }
+  }
+  toArray() {
+    return Array.from(this.#repSet.values());
+  }
+}
+
+const createFetchScheduleFactoryMethod = (playerOptions) => {
+  const fetchScheduleFactoryMethod = (getFMp4RepresentationMethod) => {
+    let lastDifferenceRanges = /* @__PURE__ */ new Set();
+    const fetchSchedule = async (currentTime, bufferedTime) => {
+      if (bufferedTime >= currentTime + playerOptions.maxBufferTime)
+        return void 0;
+      const segment = await getFMp4RepresentationMethod()?.asyncFetchSegment();
+      const url = getFMp4RepresentationMethod()?.url;
+      if (segment && url) {
+        const rangeSet = segment.getMediaRangeSet(bufferedTime, bufferedTime + playerOptions.minBufferTime).difference(lastDifferenceRanges);
+        if (rangeSet.size > 0) {
+          lastDifferenceRanges = rangeSet;
+          const rangeArray = Array.from(rangeSet);
+          const startByteRange = rangeArray.at(0)?.startByteRange;
+          const endByteRange = rangeArray.at(-1)?.endByteRange;
+          return fetch(url, { headers: {
+            range: `bytes=${startByteRange}-${endByteRange}`
+          } }).then((r) => r && r.ok ? r.arrayBuffer() : void 0).catch(() => {
+            lastDifferenceRanges = /* @__PURE__ */ new Set();
+          });
+        }
+      }
+    };
+    return fetchSchedule;
+  };
+  return fetchScheduleFactoryMethod;
+};
+
+class SourceBufferTaskCollection {
+  sourceBufferTaskMap = /* @__PURE__ */ new Map();
+  mse = new MediaSource();
+  normafragmentMp4Config;
+  fetchScheduleFactoryMethod;
+  el;
+  src;
+  constructor(normafragmentMp4Config, el, options, _eventEmitter) {
+    this.normafragmentMp4Config = normafragmentMp4Config;
+    this.el = el;
+    this.fetchScheduleFactoryMethod = createFetchScheduleFactoryMethod(options);
+    this.mse.addEventListener("sourceclose", () => {
+      URL.revokeObjectURL(this.src);
+    });
+    this.src = URL.createObjectURL(this.mse);
+  }
+  sourceBufferUpdate(currentTime) {
+    if (this.mse.readyState !== "closed") {
+      if (Array.from(this.sourceBufferTaskMap.values()).map(
+        (sourceBufferTask) => sourceBufferTask.sourceBufferUpdate(currentTime) && this.mse.readyState === "open"
+      ).every((everyEndOfStream) => everyEndOfStream)) {
+        this.mse.endOfStream();
+      }
+    }
+  }
+  /** 获取 SourceBufferTask*/
+  get(repType) {
+    return this.sourceBufferTaskMap.get(repType);
+  }
+  switch(repType, rep, currentTime, options) {
+    this.sourceBufferTaskMap.get(repType)?.switch(rep, currentTime, options);
+  }
+  /** 刷新 配置对象和重新设置源缓存任务类 */
+  refresh() {
+    const sourceBufferTaskMap = /* @__PURE__ */ new Map();
+    if (Number.isFinite(this.normafragmentMp4Config.duration) && this.normafragmentMp4Config.duration > 0) {
+      this.mse.duration = this.normafragmentMp4Config.duration;
+    }
+    Object.entries(this.normafragmentMp4Config.media).forEach(([repType, fragmentMp4Representations]) => {
+      const sourceBufferTask = this.sourceBufferTaskMap.get(repType) ?? new SourceBufferTask(this.mse, this.fetchScheduleFactoryMethod);
+      sourceBufferTaskMap.set(repType, sourceBufferTask.set(fragmentMp4Representations));
+    });
+    this.sourceBufferTaskMap.forEach((s) => {
+      s.remove();
+    });
+    this.sourceBufferTaskMap = sourceBufferTaskMap;
+    return this;
+  }
+  asyncSourceopen() {
+    const { promise, resolve } = Promise.withResolvers();
+    this.mse.addEventListener("sourceclose", async () => {
+      this.sourceBufferTaskMap = /* @__PURE__ */ new Map();
+    });
+    if (this.mse.readyState === "closed") {
+      this.mse.addEventListener("sourceopen", async () => {
+        resolve(this.refresh());
+      }, { once: true });
+      this.el.src = this.src;
+    } else {
+      resolve(this);
+    }
+    return promise;
+  }
+}
+
+class FragmentMp4Processor {
+  #SourceBufferTaskCollection;
+  constructor(sourceBufferTaskCollection) {
+    this.#SourceBufferTaskCollection = sourceBufferTaskCollection;
+  }
+  get(repType) {
+    return this.#SourceBufferTaskCollection.get(repType)?.toArray() ?? [];
+  }
+  switch(repType, repBase, currentTime, options) {
+    this.#SourceBufferTaskCollection.switch(repType, repBase, currentTime, options);
+  }
+  sourceBufferUpdate(currentTime) {
+    this.#SourceBufferTaskCollection.sourceBufferUpdate(currentTime);
+  }
+}
+const FragmentMp4Factory = {
+  name: "FragmentMp4",
+  asyncCreateProcessorInstance: async (r, el, options, eventEmitter) => {
+    const normalFragmentMp4Config = createNormalFragmentMp4Config(r);
+    return normalFragmentMp4Config ? new SourceBufferTaskCollection(normalFragmentMp4Config, el, options, eventEmitter).asyncSourceopen().then((s) => new FragmentMp4Processor(s)) : void 0;
+  }
+};
+
+const NullProcessor = new class {
+  constructor() {
+  }
+  get() {
+    return [];
+  }
+  switch() {
+  }
+  get src() {
+    return "";
+  }
+  sourceBufferUpdate() {
+  }
+}();
+const processorList = /* @__PURE__ */ new Map();
+const getRepList = (repType, processor, currentTime) => processor.get(repType).map((rep) => ({
+  id: rep.id,
+  duration: rep.duration,
+  startTime: rep.startTime,
+  codecs: rep.codecs,
+  bandwidth: rep.bandwidth,
+  mimeType: rep.mimeType,
+  width: rep.width,
+  height: rep.height,
+  sar: rep.sar,
+  switch(options = { switchMode: "soft" }) {
+    processor.switch(repType, rep, currentTime, options);
+  }
+})) || [];
+class PlayerCore {
+  #options;
+  #el;
+  #processor = NullProcessor;
+  #playerEvent = new PlayerEvent();
+  #interval = NaN;
   get el() {
     return this.#el;
   }
-  #el;
-  #MSE = new MediaSource();
-  #MPD;
-  #options = new class {
-    get minBufferTime() {
-      return this.#minBufferTime;
-    }
-    set minBufferTime(val) {
-      this.#minBufferTime = isFinite(val) ? val : this.#minBufferTime;
-    }
-    #minBufferTime = NaN;
-  }();
-  #videoSourceBufferTask;
-  #audioSourceBufferTask;
-  /** 最近视频下载比特率 */
-  get videoBitrate() {
-    return this.#videoSourceBufferTask?.bitrate ?? NaN;
+  constructor(el, options) {
+    this.#options = new PlayerOptions(options ?? { minBufferTime: 13 });
+    this.#el = typeof el === "string" ? document.getElementById(el) : el;
   }
-  /** 最近音频下载比特率 */
-  get audioBitrate() {
-    return this.#audioSourceBufferTask?.bitrate ?? NaN;
+  /** 添加事件 */
+  on(event, listener) {
+    this.#playerEvent.on(event, listener);
   }
-  /** 返回视频Rep集 */
-  get videoSet() {
-    return this.#videoSet;
+  /** 移除事件 */
+  off(event, listener) {
+    this.#playerEvent.off(event, listener);
   }
-  #videoSet = [];
-  get audioSet() {
-    return this.#audioSet;
+  /** 添加一次性事件 */
+  once(event, listener) {
+    this.#playerEvent.once(event, listener);
   }
-  #audioSet = [];
-  constructor(id, options = {}) {
-    Object.assign(this.#options, options);
-    this.#el = typeof id === "string" ? document.getElementById(id) : id;
-    this.#el.addEventListener("seeking", debounce(() => {
-      this.#videoSourceBufferTask?.addTask?.(this.#el.currentTime, this.#MSE.duration);
-      this.#audioSourceBufferTask?.addTask?.(this.#el.currentTime, this.#MSE.duration);
-    }, 500));
-    this.#el.addEventListener("timeupdate", throttle(() => {
-      if (this.#MSE.readyState === "open") {
-        this.#videoSourceBufferTask?.addTask?.(this.#el.currentTime, this.#MSE.duration);
-        this.#audioSourceBufferTask?.addTask?.(this.#el.currentTime, this.#MSE.duration);
-        if (Math.abs(this.#MSE.duration - this.#el.currentTime) < 2) {
-          this.#MSE.endOfStream();
-        }
-      }
-    }, 2500));
-  }
-  #URL = new URL(window.location.href);
-  /** 装载MPD文件 异步*/
-  loaderAsync(addr) {
-    this.#videoSet.length = 0;
-    this.#audioSet.length = 0;
-    this.#videoSourceBufferTask = void 0;
-    this.#audioSourceBufferTask = void 0;
-    return new Promise(async (r) => {
-      if (this.#el.error)
-        return r(false);
-      this.#URL = addr instanceof URL ? addr : new URL(addr, this.#URL);
-      this.#MPD = await fetchMpd(this.#URL, this.#options);
-      if (!this.#MPD)
-        return r(false);
-      this.#options.minBufferTime = isFinite(this.#options.minBufferTime) ? this.#options.minBufferTime : this.#MPD.minBufferTime;
-      const sourceopen = () => {
-        if (this.#MPD?.mediaPresentationDuration && isFinite(this.#MPD.mediaPresentationDuration) && !isFinite(this.#MSE.duration)) {
-          this.#MSE.duration = this.#MPD.mediaPresentationDuration;
-        }
-        this.#videoSourceBufferTask = new SourceBufferTask(this.#MSE, this.#MPD, this.#URL);
-        this.#audioSourceBufferTask = new SourceBufferTask(this.#MSE, this.#MPD, this.#URL);
-        (this.#MPD?.Period?.[0].videoSet ?? []).forEach((v) => this.#videoSet.push({
-          bandwidth: v.bandwidth,
-          width: v.width,
-          height: v.height,
-          mimeType: v.mimeType,
-          switch: (Ignorebuffered = false) => {
-            if (this.#videoSourceBufferTask) {
-              this.#videoSourceBufferTask?.setRep(v);
-              this.#videoSourceBufferTask?.addTask(this.el.currentTime, this.#el.duration, Ignorebuffered);
-              return true;
-            }
-            return false;
-          }
-        }));
-        (this.#MPD?.Period?.[0].audioSet ?? []).forEach((v) => this.#audioSet.push({
-          bandwidth: v.bandwidth,
-          mimeType: v.mimeType,
-          switch: (Ignorebuffered = false) => {
-            if (this.#audioSourceBufferTask) {
-              this.#audioSourceBufferTask?.setRep(v);
-              this.#audioSourceBufferTask?.addTask(this.#el.currentTime, this.#el.duration, Ignorebuffered);
-              return true;
-            }
-            return false;
-          }
-        }));
-        this.#MSE.removeEventListener("sourceopen", sourceopen);
-        return r(true);
-      };
-      this.#MSE.addEventListener("sourceopen", sourceopen);
-      this.#el.src = URL.createObjectURL(this.#MSE);
-    });
-  }
-}
-
-class Controllerbar {
-  #video;
-  get played() {
-    return this.#played;
-  }
-  set played(val) {
-    this.#played = val;
-    this.#played?.addEventListener("click", () => {
-      console.log("fewf", this.#video?.paused);
-      if (this.#video?.paused) {
-        this.#video?.play();
-      } else {
-        this.#video?.pause();
-      }
-    });
-  }
-  #played;
-  constructor(video, bar) {
-    this.#video = video;
-    for (const c of bar?.children ?? []) {
-      if (c.localName === "buttons") {
-        for (const button of c?.children ?? []) {
-          switch (button.localName) {
-            case "played":
-              this.played = button;
-              break;
+  /** 装载 MPD文件 | 分段MP4文件 异步*/
+  async loaderAsync(result, options) {
+    if (result && this.#el instanceof HTMLMediaElement) {
+      const playOptions = new PlayerOptions(Object.assign(Object.assign({}, this.#options), options));
+      const response = await Promise.resolve(
+        (result instanceof URL || typeof result === "string") && URL.canParse(result) ? fetch(result, { method: "HEAD" }) : result
+      );
+      if (response instanceof Response && response.ok || typeof response === "object") {
+        for await (const processor of processorList.values().map((p) => p.asyncCreateProcessorInstance(response, this.#el, playOptions, this.#playerEvent.emit))) {
+          if (isProcessor(processor)) {
+            this.#processor = processor;
+            clearInterval(this.#interval);
+            this.#interval = setInterval(() => {
+              const currentTime = Math.trunc(this.#el.currentTime / 60 * 10) * 6;
+              if (this.#el.error === null) {
+                processor.sourceBufferUpdate(currentTime);
+              }
+            }, this.#options.sourceBufferUpdateMinFrequency * 1e3);
+            return (repType) => getRepList(repType, this.#processor, this.#el.currentTime);
           }
         }
-        continue;
       }
+      throw new PlayerError(0, "addr 载入的类型没有处理器可以处理", result);
     }
+    throw new PlayerError(1, "el 为空或者不为HTMLMediaElement类型", this.#el);
   }
-}
-class VideoController {
-  #root;
-  #video;
-  //#messagebox=new Messagebox();
-  get controllerbar() {
-    return this.#controllerbar;
+  get(repType) {
+    return getRepList(repType, this.#processor, this.#el.currentTime);
   }
-  #controllerbar = new Controllerbar(this.#video);
-  constructor(id) {
-    this.#root = typeof id === "string" ? document.getElementById(id) : id;
-    for (const children of this.#root.children) {
-      switch (children.localName) {
-        case "video":
-          this.#video = children;
-          break;
-        case "controllerbar":
-          this.#controllerbar = new Controllerbar(this.#video, children);
-          break;
-      }
+  /** 处理器 遍历器 */
+  static processorEntries() {
+    return processorList.entries();
+  }
+  /** 添加处理器  静态方法*/
+  static setProcessor(processorFactory) {
+    if (isProcessorFactory(processorFactory)) {
+      processorList.set(processorFactory.name, processorFactory);
     }
   }
 }
 
-export { VideoController, VideoDash };
+PlayerCore.setProcessor(FragmentMp4Factory);
+
+export { FragmentMp4Factory, FragmentMp4Processor, PlayerCore as Player, PlayerError, PlayerEvent, PlayerOptions, QualityTab, Sar, debounce, divideAndRound, getSar, isProcessor, isProcessorFactory, isRepresentation, parseFromString, parsePositiveInteger, throttle };

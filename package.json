@@ -3,9 +3,16 @@
   "version": "0.1.2",
   "type": "module",
   "description": "Atc Dash流媒体播放器",
-  "keywords": ["atc","流媒体","播放器","dash"],
+  "keywords": [
+    "atc",
+    "流媒体",
+    "播放器",
+    "dash"
+  ],
   "license": "MIT",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "exports": {
     ".": {
       "import": "./dist/atc-videoplayer.js",
@@ -18,10 +25,9 @@
     "preview": "vite preview"
   },
   "devDependencies": {
-    "typescript": "^5.1.3",
-    "@types/node": "^20.12.8",
-    "vite": "^4.3.9",
-    "vite-plugin-dts": "^3.9.1",
-    "dashjs": "^4.7.1"
+    "@types/node": "^20.17.24",
+    "typescript": "^5.8.2",
+    "vite": "^4.5.9",
+    "vite-plugin-dts": "^3.9.1"
   }
 }

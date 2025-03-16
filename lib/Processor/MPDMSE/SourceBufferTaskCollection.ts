@@ -31,13 +31,13 @@ export class SourceBufferTaskCollection {
     #mse = new MediaSource();
     #mpdConverter: MPDDefaultConverter;
     #fetchScheduleFactoryMethod: FetchScheduleFactoryMethod;
-    #eventEmitter: PlayerEventEmitter
+    //#eventEmitter: PlayerEventEmitter
     #el: HTMLMediaElement;
-    constructor(mpdConverter: MPDDefaultConverter, el: HTMLMediaElement, options: PlayerOptions, eventEmitter: PlayerEventEmitter) {
+    constructor(mpdConverter: MPDDefaultConverter, el: HTMLMediaElement, options: PlayerOptions, _eventEmitter: PlayerEventEmitter) {
         this.#mpdConverter = mpdConverter
         this.#el = el;
         // this.#options = options
-        this.#eventEmitter = eventEmitter
+        //this.#eventEmitter = eventEmitter
         this.#fetchScheduleFactoryMethod = createFetchScheduleFactoryMethod(mpdConverter, options)
 
     }

@@ -12,7 +12,7 @@ export class SourceBufferTaskCollection {
     fetchScheduleFactoryMethod: FetchScheduleFactoryMethod;
     el: HTMLMediaElement;
     src: string
-    constructor(normafragmentMp4Config: NormalFragmentMp4Config, el: HTMLMediaElement, options: PlayerOptions, eventEmitter: PlayerEventEmitter) {
+    constructor(normafragmentMp4Config: NormalFragmentMp4Config, el: HTMLMediaElement, options: PlayerOptions, _eventEmitter: PlayerEventEmitter) {
         this.normafragmentMp4Config = normafragmentMp4Config;
         this.el = el;
         this.fetchScheduleFactoryMethod = createFetchScheduleFactoryMethod(options)

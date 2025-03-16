@@ -1,4 +1,4 @@
-import { divideAndRound, Representation } from "@lib"
+import { divideAndRound} from "@lib"
 import { MPDRepresentation } from "./Representation"
 
 /** 范围时间段文件类型 */
@@ -55,7 +55,7 @@ const parseSegmentFromRangeTimeStringURLs = (() => {
         }
         return rangeTimeURLs
     }
-    const parseSegmentListFromRangeTimeStringURLs = (repid: string, segmentTemplate: Element) => {
+    const parseSegmentListFromRangeTimeStringURLs = (_repid: string, _segmentTemplate: Element) => {
         return new Array<RangeTimeFileType>()
     }
     return (repid: string, mediaPresentationDuration: number, segmentElement?: Element | null): Array<RangeTimeFileType> => {
