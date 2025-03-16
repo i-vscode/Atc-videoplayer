@@ -80,7 +80,7 @@ export class PlayerCore {
                         this.#interval = setInterval(() => {                          
                             const currentTime = Math.trunc((this.#el.currentTime / 60) * 10) * 6
                             if(this.#el.error === null){ processor.sourceBufferUpdate(currentTime);}
-                        }, this.#options.sourceBufferUpdateMinFrequency * 1000);
+                        },playOptions.sourceBufferUpdateMinFrequency * 1000);
                         return (repType: RepType) => getRepList(repType, this.#processor, this.#el!.currentTime)
                     }
                 }
