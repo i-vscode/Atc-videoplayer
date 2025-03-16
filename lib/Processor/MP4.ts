@@ -1,4 +1,4 @@
-import { PlayerOptions, Processor } from "../Player"
+import { Processor } from "../Player"
 import type { ProcessorFactory, Representation, RepType, SwitchRepOptions } from "@lib"
 
 /**
@@ -8,10 +8,10 @@ class MP4Processor implements Processor {
     constructor(addr: string, el: HTMLMediaElement) {
         el.src = addr
     }
-    get(repType: RepType): Array<Representation> {
+    get(_repType: RepType): Array<Representation> {
         throw new Error("Method not implemented.")
     }
-    switch(repType: RepType, rep: Representation, currentTime: number, options: SwitchRepOptions): void {
+    switch(_repType: RepType, _rep: Representation, _currentTime: number, _options: SwitchRepOptions): void {
         throw new Error("Method not implemented.")
     }
     getRepList(_repType: RepType) {

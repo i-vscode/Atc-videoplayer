@@ -77,7 +77,7 @@ export const parseSegmentFromRangeTimeStringURLs = (() => {
         }
         return rangeTimeURLs
     }
-    const parseSegmentListFromRangeTimeStringURLs = (repid: string, segmentTemplate: Element) => {
+    const parseSegmentListFromRangeTimeStringURLs = (_repid: string, _segmentTemplate: Element) => {
         return new Array<RangeTimeURLType>()
     }
     return (repid: string, mediaPresentationDuration: number, segmentElement?: Element | null): Array<RangeTimeURLType> => {

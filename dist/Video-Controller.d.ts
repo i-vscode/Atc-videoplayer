@@ -1,4 +1,6 @@
-/** 控制栏按钮 */
+/**
+ * 播放器 控制器
+ */
 declare class Controllerbar {
     #private;
     get played(): HTMLElement | undefined;

@@ -79,6 +79,12 @@ player.loaderAsync<FragmentMp4Config>( {
 ``` 
 ## [更新](/CHANGELOG.md)
 
+### 1.3.1
+
+更新依赖
+
+修复编译中的问题细节
+
 ### 1.3.0-alpha.1
  
 新增 FragmentMp4 处理器
