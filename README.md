@@ -79,6 +79,10 @@ player.loaderAsync<FragmentMp4Config>( {
 ``` 
 ## [更新](/CHANGELOG.md)
 
+### 1.3.2
+ 
+修复FragmentMp4 最后一个分段的加载问题
+
 ### 1.3.1
 
 更新依赖

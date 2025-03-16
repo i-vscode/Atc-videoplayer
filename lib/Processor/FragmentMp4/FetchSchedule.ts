@@ -29,7 +29,7 @@ export const createFetchScheduleFactoryMethod = (playerOptions: PlayerOptions): 
                     const startByteRange = (rangeArray.at(0)?.startByteRange)  
                     const endByteRange = (rangeArray.at(-1)?.endByteRange) 
                     return fetch(url, {headers: {
-                        range: `bytes=${startByteRange}-${endByteRange}`
+                        range: Number.isNaN(endByteRange) ?  `bytes=${startByteRange}` : `bytes=${startByteRange}-${endByteRange}`
                     }})
                         .then(r => r && r.ok ? r.arrayBuffer():undefined).catch(() => { lastDifferenceRanges = new Set() })
                 }

@@ -50,7 +50,7 @@ export class Segment {
                         startTime: r.endTime,
                         endTime: r.endTime,
                         startByteRange: r.startByteRange,
-                        endByteRange: 0
+                        endByteRange: NaN
                     })
                 } else {
 
