@@ -79,6 +79,11 @@ player.loaderAsync<FragmentMp4Config>( {
 ``` 
 ## [更新](/CHANGELOG.md)
 
+### 1.3.3
+
+修复 PlayerCore.loaderAsync方法 没有正解使用PlayerOptions配置对象的问题
+
+
 ### 1.3.2
  
 修复FragmentMp4 最后一个分段的加载问题
