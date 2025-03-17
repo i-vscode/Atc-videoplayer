@@ -1,5 +1,9 @@
 # Atc-videoplayer dash流播放器 变更日志
 
+### 1.3.4
+
+修改 tools > fragmentMp4.Tool 的用例说明
+
 ### 1.3.3
 
 修复 PlayerCore.loaderAsync方法 没有正解使用PlayerOptions配置对象的问题
